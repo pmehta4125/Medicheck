@@ -1,0 +1,408 @@
+/* GENERAL LAYOUT ---------------------------- */
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f6fdfd;
+}
+
+.page-container {
+  max-width: 900px;
+  margin: auto;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* NAVBAR ----------------------------------- */
+
+.navbar {
+  width: 100%;
+  background: #0a6b63;
+  padding: 15px 0;
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  color: white;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.nav-links {
+  display: flex;
+  list-style: none;
+  gap: 24px;
+}
+
+.nav-links a {
+  color: white;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+.nav-links a:hover {
+  text-decoration: underline;
+}
+
+/* HERO ----------------------------------- */
+
+.hero {
+  text-align: center;
+  padding: 80px 20px;
+  background: #e8ffff;
+}
+
+.hero h1 {
+  font-size: 40px;
+}
+
+.primary {
+  background: #0a6b63;
+  color: white;
+  padding: 10px 18px;
+  border: none;
+  cursor: pointer;
+  margin-top: 14px;
+}
+
+/* RESULTS TABLE ------------------------------ */
+
+.result-card {
+  background: white;
+  padding: 20px;
+  margin-top: 25px;
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+}
+
+td, th {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+.status.correct { color: green; }
+.status.mismatch { color: orange; }
+.status.wrong { color: red; }
+
+.page-container {
+  max-width: 900px;
+  margin: auto;
+  padding: 40px 20px;
+}
+
+.page-title {
+  font-size: 36px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 40px;
+  color: #0f766e;
+}
+
+.hiw-section {
+  margin-bottom: 40px;
+}
+
+.hiw-section h2 {
+  font-size: 24px;
+  margin-bottom: 10px;
+  color: #085f57;
+}
+
+.hiw-section p {
+  font-size: 16px;
+  color: #444;
+}
+
+.demo-box {
+  margin: 20px 0;
+  padding: 20px;
+  border: 2px dashed #0f766e;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 16px;
+  background: #e6fffa;
+}
+
+.hiw-list li {
+  font-size: 16px;
+  color: #333;
+  margin: 8px 0;
+}
+
+/* HOW IT WORKS PAGE */
+
+.hiw-wrapper {
+  max-width: 1200px;
+  margin: auto;
+  padding: 80px 24px;
+}
+
+.hiw-header {
+  text-align: center;
+  margin-bottom: 70px;
+}
+
+.hiw-header h1 {
+  font-size: 48px;
+  font-weight: 800;
+  color: #0f766e;
+  line-height: 1.2;
+}
+
+.hiw-header p {
+  font-size: 20px;
+  color: #4b5563;
+  max-width: 700px;
+  margin: 16px auto;
+}
+
+.hiw-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 30px;
+  margin-bottom: 80px;
+}
+
+.hiw-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 40px 30px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+   transition: 0.35s ease;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.hiw-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.12);
+}
+
+.hiw-icon {
+  font-size: 46px;
+  margin-bottom: 12px;
+}
+
+.hiw-card h3 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #0d9488;
+}
+
+.hiw-card p {
+  font-size: 16px;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.hiw-card {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeUp 0.8s ease forwards;
+}
+
+.hiw-card:nth-child(1) { animation-delay: 0.1s; }
+.hiw-card:nth-child(2) { animation-delay: 0.2s; }
+.hiw-card:nth-child(3) { animation-delay: 0.3s; }
+.hiw-card:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+.hiw-demo {
+  text-align: center;
+}
+
+.hiw-demo h2 {
+  font-size: 28px;
+  color: #0f766e;
+  margin-bottom: 20px;
+}
+
+.hiw-demo-box {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border: none;
+  padding: 50px;
+  border-radius: 24px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #0f766e;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.15);
+}
+
+
+.hiw-demo-box span {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #555;
+}
+
+/* HOW IT WORKS – PRODUCT STYLE */
+
+.hiw-page {
+  width: 100%;
+}
+
+/* HERO */
+.hiw-hero {
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+  color: white;
+  padding: 100px 20px;
+  text-align: center;
+}
+
+.hiw-hero h1 {
+  font-size: 48px;
+  font-weight: 800;
+}
+
+.hiw-hero h1 span {
+  color: #ecfeff;
+}
+
+.hiw-hero p {
+  font-size: 18px;
+  max-width: 700px;
+  margin: 20px auto 0;
+  opacity: 0.95;
+}
+
+/* SECTIONS */
+.hiw-features,
+.hiw-built-for {
+  padding: 80px 20px;
+  max-width: 1200px;
+  margin: auto;
+  text-align: center;
+}
+
+.hiw-features h2,
+.hiw-built-for h2 {
+  font-size: 32px;
+  margin-bottom: 50px;
+  color: #0f766e;
+}
+
+/* GRID */
+.hiw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+/* FEATURE CARDS */
+.hiw-feature-card {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease;
+}
+
+.hiw-feature-card:hover {
+  transform: translateY(-8px);
+}
+
+.hiw-feature-card .icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.hiw-feature-card h3 {
+  font-size: 20px;
+  color: #0f766e;
+  margin-bottom: 10px;
+}
+
+.hiw-feature-card p {
+  font-size: 15px;
+  color: #555;
+}
+
+/* ROLE CARDS */
+.hiw-role-card {
+  background: #f8fafc;
+  padding: 40px 30px;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.hiw-role-card h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: #0f766e;
+}
+
+.hiw-role-card p {
+  font-size: 15px;
+  color: #555;
+}
+
+/* CTA */
+.hiw-cta {
+  background: linear-gradient(135deg, #14b8a6, #0f766e);
+  padding: 80px 20px;
+  text-align: center;
+  color: white;
+}
+
+.hiw-cta h2 {
+  font-size: 32px;
+  margin-bottom: 20px;
+}
+
+.hiw-cta button {
+  background: white;
+  color: #0f766e;
+  padding: 14px 30px;
+  font-size: 16px;
+  border-radius: 30px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+
+/* GLOBAL GRADIENT BACKGROUND */
+body {
+  background: linear-gradient(145deg, #f0fdfa, #ffffff);
+  margin: 0;
+  font-family: "Inter", sans-serif;
+}
+
+/* SECTION SEPARATOR */
+.section {
+  padding: 80px 24px;
+  max-width: 1200px;
+  margin: auto;
+}
+
+
+/* FOOTER ------------------------------------ */
+
+.footer {
+  margin-top: 40px;
+  text-align: center;
+  padding: 20px;
+  background: #0a6b63;
+  color: white;
+}

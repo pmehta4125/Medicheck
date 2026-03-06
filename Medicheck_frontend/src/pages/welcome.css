@@ -1,0 +1,69 @@
+.welcome-wrapper {
+  height: 100vh;
+  width: 100%;
+  background: linear-gradient(to bottom right, #0a6d62, #0f766e, #10b981);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  animation: fadein 0.7s ease-in-out;
+}
+
+@keyframes fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.welcome-logo {
+  font-size: 60px;
+  font-weight: 900;
+  color: white;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+.welcome-sub {
+  color: white;
+  opacity: 0.9;
+  font-size: 18px;
+  max-width: 350px;
+  margin: auto;
+  margin-bottom: 35px;
+}
+
+.welcome-buttons button {
+  display: block;
+  width: 280px;
+  padding: 14px;
+  margin: 10px auto;
+  border: none;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-login {
+  background: white;
+  color: #0a6d62;
+}
+
+.btn-signup {
+  background: #064e3b;
+  color: white;
+}
+
+.btn-guest {
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.4);
+}
+
+.input-box {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  border: none;
+  font-size: 16px;
+}
