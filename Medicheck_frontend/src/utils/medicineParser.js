@@ -3,7 +3,7 @@ export const parsePrescription = (text) => {
   const lines = text.split("\n").map((l) => l.trim());
 
   const MEDICINE_PATTERN =
-    /(paracetamol|amoxicillin|ibuprofen|dolo|azithromycin|cetirizine|pantoprazole|metformin|atorvastatin|omeprazole)/i;
+    /(paracetamol|amoxicillin|ibuprofen|dolo|azithromycin|cetirizine|pantoprazole|metformin|atorvastatin|omeprazole|aspirin|lisinopril)/i;
 
   const DOSAGE_PATTERN = /(\d{2,4}\s?mg|\d+\s?ml)/i;
   const FREQUENCY_PATTERN = /(once|twice|thrice|daily|morning|night|evening|afternoon|od|bd|tds)/i;

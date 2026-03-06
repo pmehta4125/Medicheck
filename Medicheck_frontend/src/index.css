@@ -948,6 +948,92 @@ footer {
   color: #7a1f2c;
 }
 
+.risk-card {
+  border-left-color: #9f8d26;
+}
+
+.risk-score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.risk-score-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: #113f38;
+}
+
+.risk-score-indicator {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.risk-score-indicator.green,
+.risk-score-indicator.safe {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.risk-score-indicator.yellow,
+.risk-score-indicator.moderate-risk {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.risk-score-indicator.red,
+.risk-score-indicator.high-risk {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.risk-score-note {
+  color: #5d6e6b;
+  margin-bottom: 8px;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timeline-row-item {
+  border: 1px solid #dce5e3;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdfd;
+  display: grid;
+  grid-template-columns: 72px 108px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.timeline-time-chip {
+  font-weight: 800;
+  color: #0a6d62;
+}
+
+.timeline-slot-chip {
+  border-radius: 999px;
+  background: #e3f7f3;
+  color: #0a6d62;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  text-align: center;
+}
+
+.timeline-med-name {
+  font-weight: 700;
+  color: #1f3531;
+}
+
 .history-list {
   list-style: none;
   margin: 0;

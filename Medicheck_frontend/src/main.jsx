@@ -12,16 +12,22 @@ createRoot(document.getElementById('root')).render(
 import "./index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "./index.css";
 import App from "./App";
-import { BrowserRouter } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const appTree = (
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    
-      <App />
-    
-  </React.StrictMode>
+  googleClientId ? (
+    <GoogleOAuthProvider clientId={googleClientId}>{appTree}</GoogleOAuthProvider>
+  ) : (
+    appTree
+  )
 );
 
 

@@ -1,6 +1,7 @@
 package com.example.medicheck_backend.controller;
 
 import com.example.medicheck_backend.service.OCRService;
+import com.example.medicheck_backend.service.PrescriptionInsightsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,13 +16,16 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/analyze")
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:5174"})
+@CrossOrigin(originPatterns = "http://localhost:*")
 public class OCRController {
 
     private static final Logger logger = LoggerFactory.getLogger(OCRController.class);
 
     @Autowired
     private OCRService ocrService;
+
+    @Autowired
+    private PrescriptionInsightsService prescriptionInsightsService;
 
     @PostMapping
     public ResponseEntity<?> analyzePrescription(
@@ -81,9 +85,12 @@ public class OCRController {
 
             // Return successful response
             Map<String, Object> response = new HashMap<>();
+            Map<String, Object> insights = prescriptionInsightsService.buildInsights(extractedText);
             response.put("success", true);
-            response.put("text", extractedText);
+            response.put("rawText", extractedText);
+            response.put("text", insights.getOrDefault("cleanedText", extractedText));
             response.put("message", "Prescription analyzed successfully");
+            response.putAll(insights);
 
             logger.info("=== OCR Analysis Completed Successfully ===");
             return ResponseEntity.ok(response);

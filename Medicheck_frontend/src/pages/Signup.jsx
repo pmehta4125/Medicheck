@@ -85,11 +85,13 @@ export default function Signup() {
 }*/
 
 import { useState } from "react";
+import { GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
 import "./signup.css";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -98,19 +100,56 @@ export default function Signup() {
   const handleSignup = async (e) => {
     e.preventDefault();
 
-    const res = await fetch("http://localhost:8080/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
-    });
+    try {
+      const res = await fetch("http://localhost:8080/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.error) {
-      alert(data.error);
-    } else {
+      if (!res.ok || data.error) {
+        alert(data.error || "Signup failed. Please try again.");
+        return;
+      }
+
+      alert("Signup successful! Please login.");
+      navigate("/login");
+    } catch {
+      alert("Unable to connect to the server. Please try again.");
+    }
+  };
+
+  const handleGoogleSignup = async (credentialResponse) => {
+    if (!credentialResponse?.credential) {
+      alert("Google signup failed. Please try again.");
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:8080/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: credentialResponse.credential }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        alert(data.error || "Google signup failed.");
+        return;
+      }
+
       alert("Signup successful!");
-      navigate("/home");  // 👈 Redirect to home
+      localStorage.setItem("user", JSON.stringify(data));
+      navigate("/home");
+    } catch {
+      alert("Unable to connect to the server. Please try again.");
     }
   };
 
@@ -146,6 +185,15 @@ export default function Signup() {
 
           <button className="auth-btn" type="submit">Sign Up</button>
         </form>
+
+        {googleClientId ? (
+          <div style={{ marginTop: "16px", display: "flex", justifyContent: "center" }}>
+            <GoogleLogin
+              onSuccess={handleGoogleSignup}
+              onError={() => alert("Google signup was cancelled or failed.")}
+            />
+          </div>
+        ) : null}
 
         <p className="auth-footer">
           Already have an account? <a href="/login">Login</a>

@@ -219,7 +219,9 @@ export default function UploadPrescriptions() {
   };
 
   const normalizeResult = (apiData) => {
-    const rawText = apiData?.raw || apiData?.text || apiData?.extractedText || "";
+    const cleanedText = apiData?.cleanedText || apiData?.text || "";
+    const originalText = apiData?.rawText || apiData?.raw || apiData?.extractedText || cleanedText;
+    const rawText = cleanedText || originalText;
 
     const medicinesFromApi = Array.isArray(apiData?.medicines)
       ? apiData.medicines.map((med) => ({
@@ -230,6 +232,8 @@ export default function UploadPrescriptions() {
               .filter(Boolean)
               .join(" | ") ||
             "Not specified",
+          frequency: med?.frequency || "As directed",
+          duration: med?.duration || "As prescribed",
         }))
       : [];
 
@@ -239,11 +243,20 @@ export default function UploadPrescriptions() {
         : parsePrescription(rawText).map((med) => ({
             name: med.name,
             dosage: med.dosage,
+            frequency: med.frequency,
+            duration: med.duration,
           }));
 
     return {
       raw: rawText,
+      rawOriginal: originalText,
       medicines,
+      riskScore: apiData?.riskScore || null,
+      risks: Array.isArray(apiData?.risks) ? apiData.risks : [],
+      medicineExplanations: Array.isArray(apiData?.medicineExplanations)
+        ? apiData.medicineExplanations
+        : [],
+      scheduleTimeline: Array.isArray(apiData?.scheduleTimeline) ? apiData.scheduleTimeline : [],
     };
   };
 

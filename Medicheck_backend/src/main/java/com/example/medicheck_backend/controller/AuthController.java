@@ -28,4 +28,9 @@ public class AuthController {
                 service.login(body.get("email"), body.get("password"))
         );
     }
+
+    @PostMapping("/google")
+    public ResponseEntity<?> googleLogin(@RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(service.googleLogin(body.get("idToken")));
+    }
 }

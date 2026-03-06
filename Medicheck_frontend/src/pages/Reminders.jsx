@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 const SLOT_KEYS = ["Morning", "Afternoon", "Night"];
+const SLOT_TIME = { Morning: "08:00", Afternoon: "14:00", Night: "22:00" };
 
 function inferSlot(dosage = "") {
   const value = dosage.toLowerCase();
@@ -50,11 +51,42 @@ export default function Reminders() {
   };
 
   const entries = Object.entries(reminders);
+  const timeline = entries
+    .flatMap(([key, item]) =>
+      SLOT_KEYS.filter((slot) => Boolean(item[slot])).map((slot) => ({
+        id: `${key}-${slot}`,
+        time: SLOT_TIME[slot],
+        slot,
+        name: item.name,
+        dosage: item.dosage || "Not specified",
+      }))
+    )
+    .sort((a, b) => SLOT_KEYS.indexOf(a.slot) - SLOT_KEYS.indexOf(b.slot));
 
   return (
     <div className="feature-page">
       <h1 className="feature-title">Reminders</h1>
       <p className="feature-subtitle">Toggle medicine reminders for Morning/Afternoon/Night</p>
+
+      <div className="feature-card">
+        <h3 className="feature-section-title">Today's Medicine Timeline</h3>
+        {timeline.length === 0 ? (
+          <p className="feature-row-meta">No active reminder slots yet.</p>
+        ) : (
+          <div className="timeline-list">
+            {timeline.map((item) => (
+              <div className="timeline-row-item" key={item.id}>
+                <span className="timeline-time-chip">{item.time}</span>
+                <span className="timeline-slot-chip">{item.slot}</span>
+                <div>
+                  <p className="timeline-med-name">{item.name}</p>
+                  <p className="schedule-meta">{item.dosage}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {entries.length === 0 ? (
         <div className="feature-card">No medicines available for reminders yet.</div>
