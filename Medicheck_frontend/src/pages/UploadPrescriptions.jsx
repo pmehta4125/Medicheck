@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { parsePrescription } from "../utils/medicineParser";
+import { parsePrescription, parsePrescriptionInfo } from "../utils/medicineParser";
 
 function getQualityStatus(score) {
   if (score >= 75) return "Good";
@@ -181,9 +181,24 @@ export default function UploadPrescriptions() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [qualityReport, setQualityReport] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading) {
+      setProgress(0);
+      return;
+    }
+    let current = 0;
+    const id = setInterval(() => {
+      current += current < 30 ? 3 : current < 60 ? 2 : current < 85 ? 1 : 0.3;
+      if (current >= 95) current = 95;
+      setProgress(Math.round(current));
+    }, 300);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -219,9 +234,14 @@ export default function UploadPrescriptions() {
   };
 
   const normalizeResult = (apiData) => {
-    const cleanedText = apiData?.cleanedText || apiData?.text || "";
-    const originalText = apiData?.rawText || apiData?.raw || apiData?.extractedText || cleanedText;
-    const rawText = cleanedText || originalText;
+    // Prefer Gemini AI analysis (clear readable text) over raw OCR
+    const geminiText = apiData?.geminiAnalysis || "";
+    const simpleText = apiData?.simpleEnglishText || apiData?.text || "";
+    const cleanedText = apiData?.cleanedText || "";
+    const originalText = apiData?.rawText || apiData?.raw || apiData?.extractedText || cleanedText || simpleText;
+    
+    // Use Gemini text as primary display, fallback to simpleText or cleaned
+    const rawText = geminiText || simpleText || cleanedText || originalText;
 
     const medicinesFromApi = Array.isArray(apiData?.medicines)
       ? apiData.medicines.map((med) => ({
@@ -234,23 +254,41 @@ export default function UploadPrescriptions() {
             "Not specified",
           frequency: med?.frequency || "As directed",
           duration: med?.duration || "As prescribed",
+          instructions: med?.instructions || "",
         }))
       : [];
 
+    // Parse medicines from Gemini text if API didn't detect any
     const medicines =
       medicinesFromApi.length > 0
         ? medicinesFromApi
-        : parsePrescription(rawText).map((med) => ({
-            name: med.name,
-            dosage: med.dosage,
-            frequency: med.frequency,
-            duration: med.duration,
-          }));
+        : parsePrescription(rawText);
+
+    // Extract prescription info from backend or parse from Gemini text
+    const prescriptionInfo = {
+      doctorName: apiData?.doctorName || "",
+      patientName: apiData?.patientName || "",
+      prescriptionDate: apiData?.prescriptionDate || "",
+      diagnosis: apiData?.diagnosis || "",
+      additionalNotes: apiData?.additionalNotes || "",
+    };
+
+    // If backend didn't provide them, parse from Gemini text
+    if (!prescriptionInfo.doctorName && geminiText) {
+      const parsed = parsePrescriptionInfo(geminiText);
+      prescriptionInfo.doctorName = parsed.doctor;
+      prescriptionInfo.patientName = parsed.patient;
+      prescriptionInfo.prescriptionDate = parsed.date;
+      prescriptionInfo.diagnosis = parsed.diagnosis;
+      prescriptionInfo.additionalNotes = parsed.additionalNotes;
+    }
 
     return {
       raw: rawText,
       rawOriginal: originalText,
+      geminiAnalysis: geminiText,
       medicines,
+      ...prescriptionInfo,
       riskScore: apiData?.riskScore || null,
       risks: Array.isArray(apiData?.risks) ? apiData.risks : [],
       medicineExplanations: Array.isArray(apiData?.medicineExplanations)
@@ -273,7 +311,7 @@ export default function UploadPrescriptions() {
     formData.append("file", selectedFile);
 
     try {
-      const res = await fetch("http://localhost:8080/analyze", {
+      const res = await fetch("/analyze", {
         method: "POST",
         body: formData,
       });
@@ -296,6 +334,8 @@ export default function UploadPrescriptions() {
       localStorage.setItem("extractedText", JSON.stringify([enrichedResult]));
       localStorage.setItem("prescriptionHistory", JSON.stringify(updatedHistory));
 
+      setProgress(100);
+      await new Promise((r) => setTimeout(r, 400));
       navigate("/results");
     } catch (err) {
       console.error("Upload error:", err);
@@ -378,7 +418,7 @@ export default function UploadPrescriptions() {
           disabled={loading || !selectedFile}
           className="upload-btn"
         >
-          {loading ? "Processing..." : "Analyze Prescription"}
+          {loading ? `Analyzing... ${progress}%` : "Analyze Prescription"}
         </button>
       </div>
     </div>

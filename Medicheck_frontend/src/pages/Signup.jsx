@@ -101,7 +101,7 @@ export default function Signup() {
     e.preventDefault();
 
     try {
-      const res = await fetch("http://localhost:8080/auth/signup", {
+      const res = await fetch("/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -132,7 +132,7 @@ export default function Signup() {
     }
 
     try {
-      const res = await fetch("http://localhost:8080/auth/google", {
+      const res = await fetch("/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken: credentialResponse.credential }),

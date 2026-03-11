@@ -6,88 +6,8 @@ const BRAND_ALIAS_GROUPS = [
   ["cetirizine", "cetzine"],
   ["pantoprazole", "pantocid"],
   ["amoxicillin", "amoxyclav"],
+  ["ibuprofen", "diclofenac", "naproxen"],
 ];
-
-const KNOWN_MEDICINES = [
-  "paracetamol",
-  "dolo",
-  "crocin",
-  "calpol",
-  "ibuprofen",
-  "amoxicillin",
-  "amoxyclav",
-  "azithromycin",
-  "cetirizine",
-  "pantoprazole",
-  "metformin",
-  "atorvastatin",
-  "omeprazole",
-  "aspirin",
-  "lisinopril",
-];
-
-const MEDICINE_FACTS = {
-  amoxicillin: {
-    usedFor: "Bacterial infections",
-    commonSideEffects: "Nausea, diarrhea",
-    avoidWith: "Unnecessary antibiotic overlap",
-  },
-  amoxyclav: {
-    usedFor: "Bacterial infections",
-    commonSideEffects: "Nausea, loose motions",
-    avoidWith: "Unnecessary antibiotic overlap",
-  },
-  paracetamol: {
-    usedFor: "Fever and pain",
-    commonSideEffects: "Nausea, mild rash",
-    avoidWith: "Alcohol and overdose combinations",
-  },
-  ibuprofen: {
-    usedFor: "Pain and inflammation",
-    commonSideEffects: "Acidity, stomach upset",
-    avoidWith: "Ulcer history and kidney disease",
-  },
-  azithromycin: {
-    usedFor: "Bacterial infections",
-    commonSideEffects: "Loose stools, nausea",
-    avoidWith: "Unnecessary antibiotic overlap",
-  },
-  cetirizine: {
-    usedFor: "Allergy symptoms",
-    commonSideEffects: "Sleepiness, dry mouth",
-    avoidWith: "Sedatives and alcohol",
-  },
-  pantoprazole: {
-    usedFor: "Acidity and reflux",
-    commonSideEffects: "Headache, bloating",
-    avoidWith: "Long-term unsupervised use",
-  },
-  metformin: {
-    usedFor: "Type 2 diabetes",
-    commonSideEffects: "Nausea, stomach upset",
-    avoidWith: "Heavy alcohol intake",
-  },
-  atorvastatin: {
-    usedFor: "High cholesterol",
-    commonSideEffects: "Muscle ache, nausea",
-    avoidWith: "Grapefruit juice excess",
-  },
-  omeprazole: {
-    usedFor: "Acidity and reflux",
-    commonSideEffects: "Headache, abdominal discomfort",
-    avoidWith: "Long-term unsupervised use",
-  },
-  aspirin: {
-    usedFor: "Blood thinning and heart protection",
-    commonSideEffects: "Acidity, easy bruising",
-    avoidWith: "Bleeding risk with unsupervised use",
-  },
-  lisinopril: {
-    usedFor: "Blood pressure control",
-    commonSideEffects: "Dry cough, dizziness",
-    avoidWith: "Potassium supplements without advice",
-  },
-};
 
 const TIME_BY_SLOT = {
   Morning: "08:00",
@@ -137,26 +57,30 @@ function getConfidence(medicine = {}) {
   const rawName = medicine.name || "";
   const normalized = normalizeName(rawName);
   const dosage = medicine.dosage || "";
+  const frequency = medicine.frequency || "";
+  const duration = medicine.duration || "";
+  const allInfo = `${dosage} ${frequency} ${duration}`;
 
-  let score = 35;
+  let score = 40;
 
+  // Medicine name quality — longer, readable names score higher
   if (normalized.length >= 5) score += 15;
+  if (normalized.length >= 3 && /[aeiou]/.test(normalized)) score += 5;
 
-  const knownMatch = KNOWN_MEDICINES.some(
-    (item) => normalized === normalizeName(item) || normalized.includes(normalizeName(item))
-  );
-  if (knownMatch) score += 35;
+  // AI-detected medicines with real details get higher confidence
+  if (dosage && dosage !== "Not specified") score += 12;
+  if (frequency && frequency !== "As directed") score += 10;
+  if (duration && duration !== "As prescribed") score += 8;
+  if (/\d+\s?(mg|ml|mcg|gm|iu)/i.test(allInfo)) score += 5;
+  if (/once|twice|thrice|od|bd|tds|morning|night|evening|daily/i.test(allInfo)) score += 5;
 
-  if (/\d+\s?(mg|ml)/i.test(dosage)) score += 10;
-  if (/once|twice|thrice|od|bd|tds|morning|night|evening|daily/i.test(dosage)) score += 5;
-
-  const hasMixedCharacters = /[a-z]/i.test(rawName) && /[^a-z\s\-\d]/i.test(rawName);
-  if (hasMixedCharacters) score -= 20;
+  const hasMixedCharacters = /[a-z]/i.test(rawName) && /[^a-z\s\-\d().]/i.test(rawName);
+  if (hasMixedCharacters) score -= 15;
 
   score = Math.max(0, Math.min(100, score));
 
-  if (score >= 80) return { score, label: "High" };
-  if (score >= 55) return { score, label: "Medium" };
+  if (score >= 70) return { score, label: "High" };
+  if (score >= 45) return { score, label: "Medium" };
   return { score, label: "Low" };
 }
 
@@ -215,21 +139,13 @@ function buildRiskInsights(medicines = []) {
 }
 
 function buildMedicineExplanations(medicines = []) {
-  return medicines.map((med) => {
-    const normalized = normalizeName(med.name);
-    const facts = MEDICINE_FACTS[normalized] || {
-      usedFor: "Doctor-prescribed treatment",
-      commonSideEffects: "Possible nausea or mild dizziness",
-      avoidWith: "Self-medication and duplicate brands",
-    };
-
-    return {
-      name: med.name,
-      usedFor: facts.usedFor,
-      commonSideEffects: facts.commonSideEffects,
-      avoidWith: facts.avoidWith,
-    };
-  });
+  // Uses backend-provided explanations; this is only a fallback
+  return medicines.map((med) => ({
+    name: med.name,
+    usedFor: "As prescribed by your doctor",
+    commonSideEffects: "Consult your doctor or pharmacist for side effects",
+    avoidWith: "Do not self-medicate; follow doctor's instructions",
+  }));
 }
 
 function buildScheduleTimeline(medicines = []) {
@@ -383,6 +299,12 @@ export default function BatchResults() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const removeFromHistory = (id) => {
+    const updated = savedHistory.filter((entry) => entry.id !== id);
+    setSavedHistory(updated);
+    localStorage.setItem("prescriptionHistory", JSON.stringify(updated));
+  };
+
   const updateMedicineField = (index, field, value) => {
     setEditableMedicines((prev) => prev.map((med, i) => (i === index ? { ...med, [field]: value } : med)));
   };
@@ -409,6 +331,45 @@ export default function BatchResults() {
               <button className="secondary-btn" onClick={() => window.print()}>Download / Share Report</button>
             </div>
           </div>
+
+          {/* Prescription Info — Doctor, Patient, Date, Diagnosis from AI */}
+          {(activeResult.doctorName || activeResult.patientName || activeResult.prescriptionDate || activeResult.diagnosis) && (
+            <div className="result-card">
+              <h2 className="result-heading">Prescription Information</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                {activeResult.doctorName && (
+                  <div>
+                    <p style={{ color: "#666", fontSize: "0.85rem", marginBottom: "2px" }}>Doctor</p>
+                    <p style={{ fontWeight: "600" }}>{activeResult.doctorName}</p>
+                  </div>
+                )}
+                {activeResult.patientName && (
+                  <div>
+                    <p style={{ color: "#666", fontSize: "0.85rem", marginBottom: "2px" }}>Patient</p>
+                    <p style={{ fontWeight: "600" }}>{activeResult.patientName}</p>
+                  </div>
+                )}
+                {activeResult.prescriptionDate && (
+                  <div>
+                    <p style={{ color: "#666", fontSize: "0.85rem", marginBottom: "2px" }}>Date</p>
+                    <p style={{ fontWeight: "600" }}>{activeResult.prescriptionDate}</p>
+                  </div>
+                )}
+                {activeResult.diagnosis && activeResult.diagnosis !== "Not specified" && (
+                  <div>
+                    <p style={{ color: "#666", fontSize: "0.85rem", marginBottom: "2px" }}>Diagnosis</p>
+                    <p style={{ fontWeight: "600" }}>{activeResult.diagnosis}</p>
+                  </div>
+                )}
+              </div>
+              {activeResult.additionalNotes && (
+                <div style={{ marginTop: "12px", padding: "10px", background: "#f0fdf4", borderRadius: "8px" }}>
+                  <p style={{ color: "#666", fontSize: "0.85rem", marginBottom: "2px" }}>Additional Notes</p>
+                  <p>{activeResult.additionalNotes}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="result-card risk-card">
             <h2 className="result-heading">Prescription Risk Score</h2>
@@ -449,6 +410,8 @@ export default function BatchResults() {
                       </div>
 
                       <span className="med-dose">Dose: {med.dosage || "Not specified"}</span>
+                      <span className="med-dose">Frequency: {med.frequency || "As directed"}</span>
+                      <span className="med-dose">Duration: {med.duration || "As prescribed"}</span>
 
                       {med.confidence.label === "Low" && (
                         <div className="review-edit-wrap">
@@ -495,71 +458,6 @@ export default function BatchResults() {
           </div>
 
           <div className="result-card">
-            <h2 className="result-heading">Medicine Schedule Visualization</h2>
-            {scheduleTimeline.length > 0 ? (
-              <div className="timeline-list">
-                {scheduleTimeline.map((item, index) => (
-                  <div key={`${item.medicine}-${item.slot}-${index}`} className="timeline-row-item">
-                    <span className="timeline-time-chip">{item.time}</span>
-                    <span className="timeline-slot-chip">{item.slot}</span>
-                    <div>
-                      <p className="timeline-med-name">{item.medicine}</p>
-                      <p className="schedule-meta">{item.dosage}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="no-med">No dosage schedule available.</p>
-            )}
-          </div>
-
-          <div className="result-card">
-            <h2 className="result-heading">Medicine Verification</h2>
-            <p className="verify-helper">
-              Enter chemist medicines, one per line. Format: Medicine Name - Dosage
-            </p>
-            <textarea
-              className="verify-input"
-              value={chemistInput}
-              onChange={(e) => setChemistInput(e.target.value)}
-              placeholder="Paracetamol - 500mg twice daily"
-            />
-
-            <div className="verify-grid">
-              <div className="verify-box matched-box">
-                <h3>Matched ({comparison.matched.length})</h3>
-                {comparison.matched.map((item, idx) => (
-                  <p key={`m-${idx}`}>{item.name}</p>
-                ))}
-              </div>
-
-              <div className="verify-box missing-box">
-                <h3>Missing ({comparison.missing.length})</h3>
-                {comparison.missing.map((item, idx) => (
-                  <p key={`ms-${idx}`}>{item.name}</p>
-                ))}
-              </div>
-
-              <div className="verify-box extra-box">
-                <h3>Extra ({comparison.extra.length})</h3>
-                {comparison.extra.map((item, idx) => (
-                  <p key={`e-${idx}`}>{item.name}</p>
-                ))}
-              </div>
-
-              <div className="verify-box wrong-box">
-                <h3>Wrong Dosage ({comparison.wrongDosage.length})</h3>
-                {comparison.wrongDosage.map((item, idx) => (
-                  <p key={`w-${idx}`}>
-                    {item.name} (Expected: {item.expectedDose}, Given: {item.givenDose})
-                  </p>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="result-card">
             <h2 className="result-heading">Re-upload History</h2>
             {savedHistory.length > 0 ? (
               <ul className="history-list">
@@ -571,9 +469,18 @@ export default function BatchResults() {
                         {new Date(entry.uploadedAt || Date.now()).toLocaleString()} • {entry.member || "Self"}
                       </p>
                     </div>
-                    <button className="secondary-btn" onClick={() => openFromHistory(entry)}>
-                      View Result Again
-                    </button>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button className="secondary-btn" onClick={() => openFromHistory(entry)}>
+                        View Result Again
+                      </button>
+                      <button
+                        className="secondary-btn"
+                        style={{ color: "#dc2626", borderColor: "#dc2626" }}
+                        onClick={() => removeFromHistory(entry.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -583,8 +490,12 @@ export default function BatchResults() {
           </div>
 
           <div className="result-card">
-            <h2 className="result-heading">Full OCR Text</h2>
-            <pre className="ocr-text">{activeResult.raw || "No OCR text available."}</pre>
+            <h2 className="result-heading">
+              {activeResult.geminiAnalysis ? "AI Prescription Analysis" : "Full OCR Text"}
+            </h2>
+            <pre className="ocr-text" style={{ whiteSpace: "pre-wrap", fontFamily: activeResult.geminiAnalysis ? "inherit" : "monospace" }}>
+              {activeResult.raw || "No text available."}
+            </pre>
             {activeResult.rawOriginal && activeResult.rawOriginal !== activeResult.raw ? (
               <details className="ocr-details">
                 <summary className="ocr-summary">Show Original Raw OCR (Debug)</summary>

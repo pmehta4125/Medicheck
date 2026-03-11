@@ -80,7 +80,7 @@ export default function HowItWorks() {
             Your browser does not support the video tag.
           </video>
           <p className="patient-demo-note">
-            Place your video at: <strong>public/videos/patient-demo.mp4</strong>
+            Tip: Click the play button if the video doesn't start automatically.
           </p>
         </div>
       </section>

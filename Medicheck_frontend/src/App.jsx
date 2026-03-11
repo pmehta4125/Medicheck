@@ -70,6 +70,8 @@ import SafetyWarnings from "./pages/SafetyWarnings";
 import Reminders from "./pages/Reminders";
 import HelpFaq from "./pages/HelpFaq";
 import ContactSupport from "./pages/ContactSupport";
+import AdminDashboard from "./pages/AdminDashboard";
+import Notifications from "./pages/Notifications";
 
 function App() {
   return (
@@ -92,6 +94,8 @@ function App() {
         <Route path="/reminders" element={<Reminders />} />
         <Route path="/help-faq" element={<HelpFaq />} />
         <Route path="/contact-support" element={<ContactSupport />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/notifications" element={<Notifications />} />
       </Routes>
 
       <Footer />

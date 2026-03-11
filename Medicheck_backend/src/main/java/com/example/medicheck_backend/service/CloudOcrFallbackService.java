@@ -15,6 +15,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -41,7 +42,13 @@ public class CloudOcrFallbackService {
                     "requests", List.of(
                             Map.of(
                                     "image", Map.of("content", base64Image),
-                                    "features", List.of(Map.of("type", "DOCUMENT_TEXT_DETECTION"))
+                            "features", List.of(
+                                Map.of("type", "DOCUMENT_TEXT_DETECTION", "model", "builtin/latest"),
+                                Map.of("type", "TEXT_DETECTION", "model", "builtin/latest")
+                            ),
+                            "imageContext", Map.of(
+                                "languageHints", List.of("en", "en-t-i0-handwrit")
+                            )
                             )
                     )
             );
@@ -61,12 +68,12 @@ public class CloudOcrFallbackService {
 
             String fullText = body.at("/responses/0/fullTextAnnotation/text").asText("").trim();
             if (!fullText.isBlank()) {
-                return Optional.of(fullText);
+                return Optional.of(normalizeCloudText(fullText));
             }
 
             String fallback = body.at("/responses/0/textAnnotations/0/description").asText("").trim();
             if (!fallback.isBlank()) {
-                return Optional.of(fallback);
+                return Optional.of(normalizeCloudText(fallback));
             }
 
             return Optional.empty();
@@ -74,5 +81,36 @@ public class CloudOcrFallbackService {
             logger.warn("Google Vision fallback failed: {}", ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    private String normalizeCloudText(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        String normalized = text
+                .replace('\u2018', '\'')
+                .replace('\u2019', '\'')
+                .replace('\u201c', '"')
+                .replace('\u201d', '"')
+                .replaceAll("[^\\p{Print}\\r\\n\\t]", " ")
+                .replaceAll("[\\t\\x0B\\f\\r ]+", " ")
+                .replaceAll("\\n{3,}", "\\n\\n")
+                .trim();
+
+        StringBuilder cleaned = new StringBuilder();
+        for (String line : normalized.split("\\r?\\n")) {
+            String value = line.replaceAll("\\s+", " ").trim();
+            if (value.isBlank()) {
+                continue;
+            }
+
+            String lower = value.toLowerCase(Locale.ROOT);
+            if (lower.length() >= 4) {
+                cleaned.append(value).append("\n");
+            }
+        }
+
+        return cleaned.toString().trim();
     }
 }

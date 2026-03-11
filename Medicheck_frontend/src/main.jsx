@@ -16,6 +16,13 @@ import App from "./App";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+if (import.meta.env.DEV) {
+  // Helps diagnose Google OAuth origin_mismatch during local development.
+  console.info("[Auth Debug] origin:", window.location.origin);
+  console.info("[Auth Debug] VITE_GOOGLE_CLIENT_ID:", googleClientId || "<missing>");
+}
+
 const appTree = (
   <React.StrictMode>
     <App />

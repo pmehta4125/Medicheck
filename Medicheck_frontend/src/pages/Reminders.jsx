@@ -1,38 +1,55 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const SLOT_KEYS = ["Morning", "Afternoon", "Night"];
 const SLOT_TIME = { Morning: "08:00", Afternoon: "14:00", Night: "22:00" };
 
-function inferSlot(dosage = "") {
-  const value = dosage.toLowerCase();
-  if (value.includes("morning")) return "Morning";
-  if (value.includes("afternoon")) return "Afternoon";
-  if (value.includes("night") || value.includes("evening")) return "Night";
-  return "Morning";
+function inferSlot(frequency = "", dosage = "") {
+  const value = `${frequency} ${dosage}`.toLowerCase();
+  if (value.includes("tds") || value.includes("thrice")) return ["Morning", "Afternoon", "Night"];
+  if (value.includes("bd") || value.includes("twice")) return ["Morning", "Night"];
+  if (value.includes("morning")) return ["Morning"];
+  if (value.includes("afternoon")) return ["Afternoon"];
+  if (value.includes("night") || value.includes("evening") || value.includes("hs") || value.includes("bedtime")) return ["Night"];
+  return ["Morning"];
+}
+
+function buildRemindersFromMedicines(medicines) {
+  const generated = {};
+  medicines.forEach((med, index) => {
+    const slots = inferSlot(med.frequency || "", med.dosage || "");
+    const entry = {
+      name: med.name,
+      dosage: med.dosage || "Not specified",
+      Morning: slots.includes("Morning"),
+      Afternoon: slots.includes("Afternoon"),
+      Night: slots.includes("Night"),
+    };
+    generated[`${med.name}-${index}`] = entry;
+  });
+  return generated;
 }
 
 export default function Reminders() {
   const extracted = JSON.parse(localStorage.getItem("extractedText")) || [];
   const medicines = extracted[0]?.medicines || [];
 
+  // Build a fingerprint of current medicines to detect changes
+  const medicineFingerprint = medicines.map((m) => m.name).sort().join(",");
+
   const initialState = useMemo(() => {
     const saved = JSON.parse(localStorage.getItem("medicineReminders")) || {};
-    if (Object.keys(saved).length > 0) return saved;
+    const savedFingerprint = localStorage.getItem("reminderFingerprint") || "";
 
-    const generated = {};
-    medicines.forEach((med, index) => {
-      const slot = inferSlot(med.dosage || "");
-      generated[`${med.name}-${index}`] = {
-        name: med.name,
-        dosage: med.dosage,
-        Morning: slot === "Morning",
-        Afternoon: slot === "Afternoon",
-        Night: slot === "Night",
-      };
-    });
+    // If medicines changed, rebuild reminders from scratch
+    if (savedFingerprint !== medicineFingerprint || Object.keys(saved).length === 0) {
+      const fresh = buildRemindersFromMedicines(medicines);
+      localStorage.setItem("medicineReminders", JSON.stringify(fresh));
+      localStorage.setItem("reminderFingerprint", medicineFingerprint);
+      return fresh;
+    }
 
-    return generated;
-  }, [medicines]);
+    return saved;
+  }, [medicines, medicineFingerprint]);
 
   const [reminders, setReminders] = useState(initialState);
 

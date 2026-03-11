@@ -132,7 +132,7 @@ public class AuthService {
                     "email", user.getEmail(),
                     "name", user.getName()
             );
-        } catch (GeneralSecurityException | IOException e) {
+        } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
             return Map.of("error", "Unable to verify Google token");
         }
     }
