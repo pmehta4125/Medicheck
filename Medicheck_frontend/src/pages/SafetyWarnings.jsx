@@ -1,3 +1,5 @@
+import { getActivePrescriptionForCurrentUser } from "../utils/prescription";
+
 function getWarnings(medicines = [], backendRisks = []) {
   const warnings = [];
 
@@ -42,8 +44,7 @@ function getWarnings(medicines = [], backendRisks = []) {
 }
 
 export default function SafetyWarnings() {
-  const extracted = JSON.parse(localStorage.getItem("extractedText")) || [];
-  const active = extracted[0] || {};
+  const active = getActivePrescriptionForCurrentUser() || {};
   const medicines = active.medicines || [];
   const warnings = getWarnings(medicines, active.risks);
   const riskScore = active.riskScore;

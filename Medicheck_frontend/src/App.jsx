@@ -52,7 +52,7 @@ export default App;*/
 
 
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import HowItWorks from "./pages/HowItWorks";
@@ -72,6 +72,28 @@ import HelpFaq from "./pages/HelpFaq";
 import ContactSupport from "./pages/ContactSupport";
 import AdminDashboard from "./pages/AdminDashboard";
 import Notifications from "./pages/Notifications";
+import ProfileSettings from "./pages/ProfileSettings";
+import { AUTH_REQUIRED_MESSAGE, getAuthSession, hasActiveSession, isAdminSession } from "./utils/auth";
+
+function ProtectedRoute() {
+  return hasActiveSession() ? (
+    <Outlet />
+  ) : (
+    <Navigate to="/login" replace state={{ authMessage: AUTH_REQUIRED_MESSAGE }} />
+  );
+}
+
+function GuestRoute() {
+  return getAuthSession() ? <Navigate to="/home" replace /> : <Outlet />;
+}
+
+function AdminRoute() {
+  if (!hasActiveSession()) {
+    return <Navigate to="/login" replace state={{ authMessage: AUTH_REQUIRED_MESSAGE }} />;
+  }
+
+  return isAdminSession() ? <Outlet /> : <Navigate to="/home" replace />;
+}
 
 function App() {
   return (
@@ -81,21 +103,33 @@ function App() {
       <Routes>
         <Route path="/" element={<Splash />} />
         <Route path="/welcome" element={<Welcome />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/how-it-works" element={<HowItWorks />} />
-        <Route path="/upload" element={<UploadPrescriptions />} />
-        <Route path="/processing" element={<Processing />} />
-        <Route path="/results" element={<BatchResults />} />
-        <Route path="/my-prescriptions" element={<MyPrescriptions />} />
-        <Route path="/prescriptions/:id" element={<PrescriptionDetails />} />
-        <Route path="/safety-warnings" element={<SafetyWarnings />} />
-        <Route path="/reminders" element={<Reminders />} />
-        <Route path="/help-faq" element={<HelpFaq />} />
-        <Route path="/contact-support" element={<ContactSupport />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/notifications" element={<Notifications />} />
+
+        <Route element={<GuestRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/home" element={<Home />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/upload" element={<UploadPrescriptions />} />
+          <Route path="/processing" element={<Processing />} />
+          <Route path="/results" element={<BatchResults />} />
+          <Route path="/my-prescriptions" element={<MyPrescriptions />} />
+          <Route path="/prescriptions/:id" element={<PrescriptionDetails />} />
+          <Route path="/safety-warnings" element={<SafetyWarnings />} />
+          <Route path="/reminders" element={<Reminders />} />
+          <Route path="/help-faq" element={<HelpFaq />} />
+          <Route path="/contact-support" element={<ContactSupport />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/profile" element={<ProfileSettings />} />
+        </Route>
+
+        <Route element={<AdminRoute />}>
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       <Footer />

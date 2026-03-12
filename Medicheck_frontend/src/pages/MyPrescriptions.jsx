@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAuthSession } from "../utils/auth";
 
 function getStatus(item) {
   const medCount = item?.medicines?.length || 0;
@@ -10,11 +11,18 @@ function getStatus(item) {
 
 export default function MyPrescriptions() {
   const navigate = useNavigate();
+  const currentUser = getAuthSession();
+  const currentEmail = currentUser?.email || "";
   const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
 
+  const userHistory = useMemo(
+    () => history.filter((entry) => (entry?.ownerEmail || "").toLowerCase() === currentEmail.toLowerCase()),
+    [history, currentEmail]
+  );
+
   const sortedHistory = useMemo(
-    () => [...history].sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0)),
-    [history]
+    () => [...userHistory].sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0)),
+    [userHistory]
   );
 
   const openResult = (entry) => {

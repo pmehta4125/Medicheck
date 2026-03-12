@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { enableGuestSession } from "../utils/auth";
 import "./welcome.css";
 
 export default function Welcome() {
@@ -22,7 +23,13 @@ export default function Welcome() {
             Signup
           </button>
 
-          <button className="btn-guest" onClick={() => navigate("/home")}>
+          <button
+            className="btn-guest"
+            onClick={() => {
+              enableGuestSession();
+              navigate("/home", { replace: true });
+            }}
+          >
             Continue as Guest
           </button>
         </div>

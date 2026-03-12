@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getCurrentUserEmail, getActivePrescriptionForCurrentUser } from "../utils/prescription";
 
 const SLOT_KEYS = ["Morning", "Afternoon", "Night"];
 const SLOT_TIME = { Morning: "08:00", Afternoon: "14:00", Night: "22:00" };
@@ -30,26 +31,29 @@ function buildRemindersFromMedicines(medicines) {
 }
 
 export default function Reminders() {
-  const extracted = JSON.parse(localStorage.getItem("extractedText")) || [];
-  const medicines = extracted[0]?.medicines || [];
+  const currentEmail = getCurrentUserEmail();
+  const activePrescription = getActivePrescriptionForCurrentUser();
+  const medicines = activePrescription?.medicines || [];
+  const reminderStorageKey = `medicineReminders:${currentEmail || "guest"}`;
+  const fingerprintStorageKey = `reminderFingerprint:${currentEmail || "guest"}`;
 
   // Build a fingerprint of current medicines to detect changes
   const medicineFingerprint = medicines.map((m) => m.name).sort().join(",");
 
   const initialState = useMemo(() => {
-    const saved = JSON.parse(localStorage.getItem("medicineReminders")) || {};
-    const savedFingerprint = localStorage.getItem("reminderFingerprint") || "";
+    const saved = JSON.parse(localStorage.getItem(reminderStorageKey)) || {};
+    const savedFingerprint = localStorage.getItem(fingerprintStorageKey) || "";
 
     // If medicines changed, rebuild reminders from scratch
     if (savedFingerprint !== medicineFingerprint || Object.keys(saved).length === 0) {
       const fresh = buildRemindersFromMedicines(medicines);
-      localStorage.setItem("medicineReminders", JSON.stringify(fresh));
-      localStorage.setItem("reminderFingerprint", medicineFingerprint);
+      localStorage.setItem(reminderStorageKey, JSON.stringify(fresh));
+      localStorage.setItem(fingerprintStorageKey, medicineFingerprint);
       return fresh;
     }
 
     return saved;
-  }, [medicines, medicineFingerprint]);
+  }, [medicines, medicineFingerprint, reminderStorageKey, fingerprintStorageKey]);
 
   const [reminders, setReminders] = useState(initialState);
 
@@ -62,7 +66,7 @@ export default function Reminders() {
           [slot]: !prev[key][slot],
         },
       };
-      localStorage.setItem("medicineReminders", JSON.stringify(next));
+      localStorage.setItem(reminderStorageKey, JSON.stringify(next));
       return next;
     });
   };

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { hasUploadedPrescription, UPLOAD_REQUIRED_MESSAGE } from "../utils/prescription";
 
 const BRAND_ALIAS_GROUPS = [
   ["paracetamol", "dolo", "calpol", "crocin"],
@@ -182,6 +183,12 @@ export default function BatchResults() {
   const [savedHistory, setSavedHistory] = useState(getHistory);
   const [activeResult, setActiveResult] = useState(extracted[0] || null);
   const [editableMedicines, setEditableMedicines] = useState(extracted[0]?.medicines || []);
+
+  useEffect(() => {
+    if (!hasUploadedPrescription()) {
+      navigate("/upload", { replace: true, state: { uploadMessage: UPLOAD_REQUIRED_MESSAGE } });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const fresh = getExtracted();

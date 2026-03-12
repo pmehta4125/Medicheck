@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { parsePrescription, parsePrescriptionInfo } from "../utils/medicineParser";
+import { getAuthSession } from "../utils/auth";
+import { markPrescriptionUploaded } from "../utils/prescription";
 
 function getQualityStatus(score) {
   if (score >= 75) return "Good";
@@ -185,6 +187,8 @@ export default function UploadPrescriptions() {
   const [error, setError] = useState("");
   const [qualityReport, setQualityReport] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const uploadMessage = location.state?.uploadMessage;
 
   useEffect(() => {
     if (!loading) {
@@ -327,16 +331,18 @@ export default function UploadPrescriptions() {
         id: Date.now(),
         uploadedAt: new Date().toISOString(),
         fileName: selectedFile.name,
+        ownerEmail: getAuthSession()?.email || "",
       };
       const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
       const updatedHistory = [enrichedResult, ...history].slice(0, 20);
 
       localStorage.setItem("extractedText", JSON.stringify([enrichedResult]));
       localStorage.setItem("prescriptionHistory", JSON.stringify(updatedHistory));
+      markPrescriptionUploaded();
 
       setProgress(100);
       await new Promise((r) => setTimeout(r, 400));
-      navigate("/results");
+      navigate("/results", { replace: true });
     } catch (err) {
       console.error("Upload error:", err);
       setError("Could not process image. Please check backend and try again.");
@@ -350,6 +356,22 @@ export default function UploadPrescriptions() {
       <h1 className="upload-title">Upload Prescription</h1>
 
       <div className="upload-box">
+        {uploadMessage ? (
+          <p
+            style={{
+              marginBottom: "14px",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: "#fff4e5",
+              color: "#9a3412",
+              fontWeight: 600,
+              textAlign: "center",
+            }}
+          >
+            {uploadMessage}
+          </p>
+        ) : null}
+
         <input
           type="file"
           accept="image/*"

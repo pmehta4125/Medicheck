@@ -14,9 +14,13 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
@@ -30,7 +34,30 @@ public class AuthService {
     @Value("${google.client-id}")
     private String googleClientId;
 
+    @Value("${app.admin.emails:}")
+    private String adminEmails;
+
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+
+    private Set<String> getConfiguredAdminEmails() {
+        if (adminEmails == null || adminEmails.isBlank()) {
+            return Collections.emptySet();
+        }
+
+        return Arrays.stream(adminEmails.split(","))
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private String resolveRoleForEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "PATIENT";
+        }
+
+        return getConfiguredAdminEmails().contains(email.trim().toLowerCase()) ? "ADMIN" : "PATIENT";
+    }
 
     public Map<String, Object> signup(User user) {
         if (user.getEmail() == null || user.getPassword() == null || user.getName() == null) {
@@ -45,9 +72,15 @@ public class AuthService {
 
         user.setEmail(normalizedEmail);
         user.setPassword(encoder.encode(user.getPassword()));
+        user.setRole(resolveRoleForEmail(normalizedEmail));
         repo.save(user);
 
-        return Map.of("message", "Signup successful");
+        return Map.of(
+            "message", "Signup successful",
+            "email", user.getEmail(),
+            "name", user.getName(),
+            "role", user.getRole()
+        );
     }
 
     public Map<String, Object> login(String email, String password) {
@@ -75,11 +108,19 @@ public class AuthService {
             return Map.of("error", "Invalid password");
         }
 
+        String role = user.getRole();
+        if (role == null || role.isBlank()) {
+            role = resolveRoleForEmail(user.getEmail());
+            user.setRole(role);
+            repo.save(user);
+        }
+
         String token = jwtUtil.generateToken(user.getEmail());
         return Map.of(
                 "token", token,
                 "email", user.getEmail(),
-                "name", user.getName()
+                "name", user.getName(),
+                "role", role
         );
     }
 
@@ -120,9 +161,17 @@ public class AuthService {
                 user.setEmail(normalizedEmail);
                 user.setName(name != null && !name.isBlank() ? name : "Google User");
                 user.setPassword(encoder.encode(UUID.randomUUID().toString()));
+                user.setRole(resolveRoleForEmail(normalizedEmail));
                 repo.save(user);
             } else if ((user.getName() == null || user.getName().isBlank()) && name != null && !name.isBlank()) {
                 user.setName(name);
+                repo.save(user);
+            }
+
+            String role = user.getRole();
+            if (role == null || role.isBlank()) {
+                role = resolveRoleForEmail(user.getEmail());
+                user.setRole(role);
                 repo.save(user);
             }
 
@@ -130,7 +179,8 @@ public class AuthService {
             return Map.of(
                     "token", token,
                     "email", user.getEmail(),
-                    "name", user.getName()
+                    "name", user.getName(),
+                    "role", role
             );
         } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
             return Map.of("error", "Unable to verify Google token");

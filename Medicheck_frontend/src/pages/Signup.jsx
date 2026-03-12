@@ -87,6 +87,8 @@ export default function Signup() {
 import { useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
+import { saveAuthSession } from "../utils/auth";
+import { clearPrescriptionUploadFlag } from "../utils/prescription";
 import "./signup.css";
 
 export default function Signup() {
@@ -146,7 +148,8 @@ export default function Signup() {
       }
 
       alert("Signup successful!");
-      localStorage.setItem("user", JSON.stringify(data));
+      clearPrescriptionUploadFlag();
+      saveAuthSession(data);
       navigate("/home");
     } catch {
       alert("Unable to connect to the server. Please try again.");
