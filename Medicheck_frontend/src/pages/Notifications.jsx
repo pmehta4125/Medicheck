@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
+import { getAuthSession } from "../utils/auth";
 
-function generateNotifications() {
+function generateNotifications(currentEmail) {
   const notifications = [];
   const now = Date.now();
 
   try {
-    // From prescription history
     const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
-    const extracted = JSON.parse(localStorage.getItem("extractedText")) || [];
-    const active = extracted[0];
+    const userHistory = (history || [])
+      .filter((entry) => (entry?.ownerEmail || "").toLowerCase() === (currentEmail || "").toLowerCase())
+      .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
+
+    const active = userHistory[0];
 
     if (active) {
       const medicines = active.medicines || [];
@@ -77,18 +80,18 @@ function generateNotifications() {
     }
 
     // History-based notifications
-    if (history.length > 0) {
+    if (userHistory.length > 0) {
       notifications.push({
         id: "history-saved",
         type: "info",
         icon: "✅",
         title: "Prescription Saved",
-        message: `${history.length} prescription(s) saved in your history.`,
+        message: `${userHistory.length} prescription(s) saved in your history.`,
         time: now - 1800000,
       });
     }
 
-    if (history.length >= 3) {
+    if (userHistory.length >= 3) {
       notifications.push({
         id: "report-ready",
         type: "success",
@@ -126,29 +129,40 @@ const TYPE_STYLES = {
 };
 
 export default function Notifications() {
+  const currentEmail = (getAuthSession()?.email || "").toLowerCase();
+  const dismissedKey = currentEmail ? `dismissedNotifications:${currentEmail}` : "dismissedNotifications:guest";
+
   const [notifications, setNotifications] = useState([]);
   const [dismissed, setDismissed] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("dismissedNotifications")) || [];
+      return JSON.parse(localStorage.getItem(dismissedKey)) || [];
     } catch {
       return [];
     }
   });
 
   useEffect(() => {
-    setNotifications(generateNotifications());
-  }, []);
+    setNotifications(generateNotifications(currentEmail));
+  }, [currentEmail]);
+
+  useEffect(() => {
+    try {
+      setDismissed(JSON.parse(localStorage.getItem(dismissedKey)) || []);
+    } catch {
+      setDismissed([]);
+    }
+  }, [dismissedKey]);
 
   const dismiss = (id) => {
     const updated = [...dismissed, id];
     setDismissed(updated);
-    localStorage.setItem("dismissedNotifications", JSON.stringify(updated));
+    localStorage.setItem(dismissedKey, JSON.stringify(updated));
   };
 
   const clearAll = () => {
     const allIds = notifications.map((n) => n.id);
     setDismissed(allIds);
-    localStorage.setItem("dismissedNotifications", JSON.stringify(allIds));
+    localStorage.setItem(dismissedKey, JSON.stringify(allIds));
   };
 
   const visible = notifications.filter((n) => !dismissed.includes(n.id));

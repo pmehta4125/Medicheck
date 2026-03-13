@@ -99,29 +99,29 @@ public class OCRController {
                 // Build insights from Gemini's structured text (parses medicines, risk, schedule)
                 Map<String, Object> insights = prescriptionInsightsService.buildInsightsFromGemini(geminiText);
 
-                // Also run traditional OCR for raw text comparison
-                String extractedText = "";
-                try {
-                    extractedText = ocrService.extractText(tempFile);
-                } catch (Exception ocrEx) {
-                    logger.warn("Traditional OCR failed (Gemini already succeeded): {}", ocrEx.getMessage());
-                }
-
-                // If Gemini found no medicines, try supplementing from OCR text
+                // Only run slow Tesseract OCR if Gemini found no medicines (rare)
                 @SuppressWarnings("unchecked")
                 java.util.List<Object> geminiMedicines = (java.util.List<Object>) insights.get("medicines");
-                if ((geminiMedicines == null || geminiMedicines.isEmpty()) && !extractedText.isBlank()) {
-                    logger.info("Gemini found no medicines, attempting OCR-based extraction as supplement...");
-                    Map<String, Object> ocrInsights = prescriptionInsightsService.buildInsights(extractedText);
-                    @SuppressWarnings("unchecked")
-                    java.util.List<Object> ocrMedicines = (java.util.List<Object>) ocrInsights.get("medicines");
-                    if (ocrMedicines != null && !ocrMedicines.isEmpty()) {
-                        logger.info("OCR extracted {} medicines as supplement", ocrMedicines.size());
-                        insights.put("medicines", ocrMedicines);
-                        insights.put("riskScore", ocrInsights.get("riskScore"));
-                        insights.put("risks", ocrInsights.get("risks"));
-                        insights.put("medicineExplanations", ocrInsights.get("medicineExplanations"));
-                        insights.put("scheduleTimeline", ocrInsights.get("scheduleTimeline"));
+                String extractedText = "";
+                if (geminiMedicines == null || geminiMedicines.isEmpty()) {
+                    logger.info("Gemini found no medicines, running OCR as supplement...");
+                    try {
+                        extractedText = ocrService.extractText(tempFile);
+                    } catch (Exception ocrEx) {
+                        logger.warn("Supplemental OCR failed: {}", ocrEx.getMessage());
+                    }
+                    if (!extractedText.isBlank()) {
+                        Map<String, Object> ocrInsights = prescriptionInsightsService.buildInsights(extractedText);
+                        @SuppressWarnings("unchecked")
+                        java.util.List<Object> ocrMedicines = (java.util.List<Object>) ocrInsights.get("medicines");
+                        if (ocrMedicines != null && !ocrMedicines.isEmpty()) {
+                            logger.info("OCR extracted {} medicines as supplement", ocrMedicines.size());
+                            insights.put("medicines", ocrMedicines);
+                            insights.put("riskScore", ocrInsights.get("riskScore"));
+                            insights.put("risks", ocrInsights.get("risks"));
+                            insights.put("medicineExplanations", ocrInsights.get("medicineExplanations"));
+                            insights.put("scheduleTimeline", ocrInsights.get("scheduleTimeline"));
+                        }
                     }
                 }
 

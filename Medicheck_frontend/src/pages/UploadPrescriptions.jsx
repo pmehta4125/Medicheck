@@ -197,10 +197,10 @@ export default function UploadPrescriptions() {
     }
     let current = 0;
     const id = setInterval(() => {
-      current += current < 30 ? 3 : current < 60 ? 2 : current < 85 ? 1 : 0.3;
+      current += current < 40 ? 5 : current < 70 ? 3 : current < 90 ? 1.5 : 0.5;
       if (current >= 95) current = 95;
       setProgress(Math.round(current));
-    }, 300);
+    }, 200);
     return () => clearInterval(id);
   }, [loading]);
 
@@ -341,7 +341,7 @@ export default function UploadPrescriptions() {
       markPrescriptionUploaded();
 
       setProgress(100);
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 150));
       navigate("/results", { replace: true });
     } catch (err) {
       console.error("Upload error:", err);
@@ -377,6 +377,7 @@ export default function UploadPrescriptions() {
           accept="image/*"
           onChange={handleFileChange}
           className="file-input"
+          disabled={!!selectedFile || loading}
         />
 
         {selectedFile && <p className="file-count">Selected: {selectedFile.name}</p>}

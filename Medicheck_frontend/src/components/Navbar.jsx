@@ -47,9 +47,16 @@ export default function Navbar() {
   useEffect(() => {
     const updateCount = () => {
       try {
-        const extracted = JSON.parse(localStorage.getItem("extractedText")) || [];
-        const dismissed = JSON.parse(localStorage.getItem("dismissedNotifications")) || [];
-        const active = extracted[0];
+        const currentEmail = (getAuthSession()?.email || "").toLowerCase();
+        const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
+        const userHistory = currentEmail
+          ? history
+              .filter((entry) => (entry?.ownerEmail || "").toLowerCase() === currentEmail)
+              .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
+          : [];
+        const active = userHistory[0] || null;
+        const dismissedKey = currentEmail ? `dismissedNotifications:${currentEmail}` : "dismissedNotifications:guest";
+        const dismissed = JSON.parse(localStorage.getItem(dismissedKey)) || [];
         let count = 0;
         if (active) {
           const meds = active.medicines || [];
@@ -61,9 +68,8 @@ export default function Navbar() {
           count += (active.risks || []).filter((r) => r.severity === "High" || r.severity === "Medium").length;
           count++; // analysis complete
         }
-        const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
-        if (history.length > 0) count++;
-        if (history.length >= 3) count++;
+        if (userHistory.length > 0) count++;
+        if (userHistory.length >= 3) count++;
         count = Math.max(0, count - dismissed.length);
         setNotifCount(count);
       } catch {
@@ -97,38 +103,40 @@ export default function Navbar() {
       <div style={{ display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap", justifyContent: "flex-end" }}>
         <div className="nav-menu" style={{ display: "flex", alignItems: "center", gap: "2px", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <Link to="/home" onClick={handleProtectedNavigation}>Home</Link>
-          <Link to="/how-it-works" onClick={handleProtectedNavigation}>How It Works</Link>
-          <Link to="/upload" onClick={handleProtectedNavigation}>Upload</Link>
-          <Link to="/my-prescriptions" onClick={handleProtectedNavigation}>My Prescriptions</Link>
-          <Link to="/safety-warnings" onClick={handleProtectedNavigation}>Safety</Link>
-          <Link to="/reminders" onClick={handleProtectedNavigation}>Reminders</Link>
-          <Link to="/notifications" onClick={handleProtectedNavigation} style={{ position: "relative" }}>
-          🔔
-          {notifCount > 0 && (
-            <span
-              style={{
-                position: "absolute",
-                top: "-6px",
-                right: "-10px",
-                background: "#ef4444",
-                color: "#fff",
-                borderRadius: "50%",
-                width: "18px",
-                height: "18px",
-                fontSize: "0.7rem",
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {notifCount > 9 ? "9+" : notifCount}
-            </span>
+          {!isAdmin && <Link to="/how-it-works" onClick={handleProtectedNavigation}>How It Works</Link>}
+          {!isAdmin && <Link to="/upload" onClick={handleProtectedNavigation}>Upload</Link>}
+          {!isAdmin && <Link to="/my-prescriptions" onClick={handleProtectedNavigation}>My Prescriptions</Link>}
+          {!isAdmin && <Link to="/safety-warnings" onClick={handleProtectedNavigation}>Safety</Link>}
+          {!isAdmin && <Link to="/reminders" onClick={handleProtectedNavigation}>Reminders</Link>}
+          {!isAdmin && (
+            <Link to="/notifications" onClick={handleProtectedNavigation} style={{ position: "relative" }}>
+            🔔
+            {notifCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-6px",
+                  right: "-10px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  borderRadius: "50%",
+                  width: "18px",
+                  height: "18px",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {notifCount > 9 ? "9+" : notifCount}
+              </span>
+            )}
+            </Link>
           )}
-          </Link>
-          <Link to="/help-faq" onClick={handleProtectedNavigation}>Help</Link>
-          {isAdmin ? <Link to="/admin" onClick={handleProtectedNavigation}>Admin</Link> : null}
-          <Link to="/contact-support" onClick={handleProtectedNavigation}>Contact</Link>
+          {!isAdmin && <Link to="/help-faq" onClick={handleProtectedNavigation}>Help</Link>}
+          {isAdmin && <Link to="/admin" onClick={handleProtectedNavigation}>Dashboard</Link>}
+          {!isAdmin && <Link to="/contact-support" onClick={handleProtectedNavigation}>Contact</Link>}
         </div>
 
         {isLoggedIn ? (

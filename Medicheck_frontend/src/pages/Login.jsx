@@ -3,6 +3,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import { useLocation, useNavigate } from "react-router-dom";
 import { saveAuthSession } from "../utils/auth";
 import { clearPrescriptionUploadFlag } from "../utils/prescription";
+import { showToast } from "../utils/toast";
 import "./login.css";
 
 export default function Login() {
@@ -30,22 +31,22 @@ export default function Login() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        alert(data.error || "Login failed. Please check your credentials.");
+        showToast(data.error || "Login failed. Please check your credentials.", "error");
         return;
       }
 
-      alert("Login successful!");
+      showToast("Login successful!", "success");
       clearPrescriptionUploadFlag();
       saveAuthSession(data);
       navigate("/home");
     } catch {
-      alert("Unable to connect to the server. Please try again.");
+      showToast("Unable to connect to the server. Please try again.", "error");
     }
   };
 
   const handleGoogleLogin = async (credentialResponse) => {
     if (!credentialResponse?.credential) {
-      alert("Google login failed. Please try again.");
+      showToast("Google login failed. Please try again.", "error");
       return;
     }
 
@@ -59,23 +60,23 @@ export default function Login() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        alert(data.error || "Google login failed.");
+        showToast(data.error || "Google login failed.", "error");
         return;
       }
 
-      alert("Login successful!");
+      showToast("Login successful!", "success");
       clearPrescriptionUploadFlag();
       saveAuthSession(data);
       navigate("/home");
     } catch {
-      alert("Unable to connect to the server. Please try again.");
+      showToast("Unable to connect to the server. Please try again.", "error");
     }
   };
 
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1 className="auth-title">Welcome Back</h1>
+        <h1 className="auth-title">Welcome</h1>
         <p className="auth-subtitle">Login to continue using MediCheck</p>
 
         {authMessage ? (
@@ -94,13 +95,14 @@ export default function Login() {
           </p>
         ) : null}
 
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleLogin} autoComplete="off">
           <label>Email</label>
           <input 
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required 
+            required
+            autoComplete="off"
           />
 
           <label>Password</label>
@@ -108,7 +110,8 @@ export default function Login() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required 
+            required
+            autoComplete="new-password"
           />
 
           <button className="auth-btn" type="submit">Login</button>
@@ -118,7 +121,7 @@ export default function Login() {
           <div style={{ marginTop: "16px", display: "flex", justifyContent: "center" }}>
             <GoogleLogin
               onSuccess={handleGoogleLogin}
-              onError={() => alert("Google login was cancelled or failed.")}
+              onError={() => showToast("Google login was cancelled or failed.", "error")}
             />
           </div>
         ) : null}

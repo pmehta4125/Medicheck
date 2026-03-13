@@ -3,10 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { getAuthSession } from "../utils/auth";
 
 function getStatus(item) {
-  const medCount = item?.medicines?.length || 0;
-  if (medCount >= 3) return "Verified";
-  if (medCount > 0) return "Needs Review";
-  return "Uploaded";
+  if (item?.geminiAnalysis) return "AI Analyzed";
+  if (item?.raw || item?.medicines?.length > 0) return "OCR Only";
+  return "No Data";
 }
 
 export default function MyPrescriptions() {

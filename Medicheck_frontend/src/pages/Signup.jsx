@@ -89,6 +89,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
 import { saveAuthSession } from "../utils/auth";
 import { clearPrescriptionUploadFlag } from "../utils/prescription";
+import { showToast } from "../utils/toast";
 import "./signup.css";
 
 export default function Signup() {
@@ -98,9 +99,15 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const handleSignup = async (e) => {
     e.preventDefault();
+
+    if (password !== confirmPassword) {
+      showToast("Passwords do not match.", "error");
+      return;
+    }
 
     try {
       const res = await fetch("/auth/signup", {
@@ -116,20 +123,20 @@ export default function Signup() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        alert(data.error || "Signup failed. Please try again.");
+        showToast(data.error || "Signup failed. Please try again.", "error");
         return;
       }
 
-      alert("Signup successful! Please login.");
+      showToast("Signup successful! Please login.", "success");
       navigate("/login");
     } catch {
-      alert("Unable to connect to the server. Please try again.");
+      showToast("Unable to connect to the server. Please try again.", "error");
     }
   };
 
   const handleGoogleSignup = async (credentialResponse) => {
     if (!credentialResponse?.credential) {
-      alert("Google signup failed. Please try again.");
+      showToast("Google signup failed. Please try again.", "error");
       return;
     }
 
@@ -143,16 +150,16 @@ export default function Signup() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        alert(data.error || "Google signup failed.");
+        showToast(data.error || "Google signup failed.", "error");
         return;
       }
 
-      alert("Signup successful!");
+      showToast("Signup successful!", "success");
       clearPrescriptionUploadFlag();
       saveAuthSession(data);
       navigate("/home");
     } catch {
-      alert("Unable to connect to the server. Please try again.");
+      showToast("Unable to connect to the server. Please try again.", "error");
     }
   };
 
@@ -186,6 +193,14 @@ export default function Signup() {
             required 
           />
 
+          <label>Confirm Password</label>
+          <input 
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required 
+          />
+
           <button className="auth-btn" type="submit">Sign Up</button>
         </form>
 
@@ -193,7 +208,7 @@ export default function Signup() {
           <div style={{ marginTop: "16px", display: "flex", justifyContent: "center" }}>
             <GoogleLogin
               onSuccess={handleGoogleSignup}
-              onError={() => alert("Google signup was cancelled or failed.")}
+              onError={() => showToast("Google signup was cancelled or failed.", "error")}
             />
           </div>
         ) : null}

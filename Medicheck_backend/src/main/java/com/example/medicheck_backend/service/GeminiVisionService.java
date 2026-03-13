@@ -2,6 +2,7 @@ package com.example.medicheck_backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,6 +10,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
@@ -36,6 +38,15 @@ public class GeminiVisionService {
     @Value("${ocr.cloud.google.api-key:}")
     private String googleApiKey;
 
+    @Value("${gemini.http.connect-timeout-ms:8000}")
+    private int connectTimeoutMs;
+
+    @Value("${gemini.http.read-timeout-ms:25000}")
+    private int readTimeoutMs;
+
+    @Value("${gemini.auth-failure-cooldown-ms:600000}")
+    private long authFailureCooldownMs;
+
     private String getEffectiveApiKey() {
         if (geminiApiKey != null && !geminiApiKey.isBlank()) {
             return geminiApiKey;
@@ -43,8 +54,9 @@ public class GeminiVisionService {
         return googleApiKey;
     }
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private volatile long geminiAuthFailedUntilEpochMs = 0L;
 
     private static final String GEMINI_ENDPOINT_TEMPLATE =
             "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s";
@@ -55,8 +67,23 @@ public class GeminiVisionService {
             "gemini-2.0-flash"
     };
 
-    private static final int MAX_429_RETRIES = 3;
-    private static final long[] RETRY_DELAYS_MS = {5000, 10000, 20000};
+    private static final int MAX_429_RETRIES = 2;
+    private static final long[] RETRY_DELAYS_MS = {2000, 5000};
+
+    @PostConstruct
+    void initRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeoutMs);
+        factory.setReadTimeout(readTimeoutMs);
+        this.restTemplate = new RestTemplate(factory);
+
+        logger.info(
+                "Gemini client configured with connectTimeout={}ms, readTimeout={}ms, authCooldown={}ms",
+                connectTimeoutMs,
+                readTimeoutMs,
+                authFailureCooldownMs
+        );
+    }
 
     private static final String PRESCRIPTION_PROMPT = """
             You are an expert medical prescription reader and pharmacist with 30 years of experience reading doctor handwriting.
@@ -120,6 +147,11 @@ public class GeminiVisionService {
             return Optional.empty();
         }
 
+        if (isAuthCooldownActive()) {
+            logger.warn("Gemini temporarily disabled due to recent auth failure");
+            return Optional.empty();
+        }
+
         try {
             byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
@@ -177,14 +209,19 @@ public class GeminiVisionService {
 
                     } catch (HttpClientErrorException e) {
                         int status = e.getStatusCode().value();
+                        if (status == 401 || status == 403) {
+                            markAuthFailure(status);
+                            return Optional.empty();
+                        }
                         if (status == 429 && attempt < MAX_429_RETRIES) {
                             long delay = RETRY_DELAYS_MS[attempt];
                             logger.info("Gemini {} rate limited (429), waiting {}ms before retry...", model, delay);
                             try { Thread.sleep(delay); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                             continue; // retry same model
                         }
-                        logger.warn("Gemini {} HTTP error {}: {}", model, e.getStatusCode(),
-                                e.getResponseBodyAsString().substring(0, Math.min(200, e.getResponseBodyAsString().length())));
+                        String responseBody = e.getResponseBodyAsString();
+                        String snippet = responseBody == null ? "" : responseBody.substring(0, Math.min(200, responseBody.length()));
+                        logger.warn("Gemini {} HTTP error {}: {}", model, e.getStatusCode(), snippet);
                         break; // try next model
                     } catch (Exception e) {
                         logger.warn("Gemini {} failed: {} - {}", model, e.getClass().getSimpleName(), e.getMessage());
@@ -317,6 +354,11 @@ public class GeminiVisionService {
             return Optional.empty();
         }
 
+        if (isAuthCooldownActive()) {
+            logger.warn("Skipping Gemini text interpretation during auth cooldown");
+            return Optional.empty();
+        }
+
         String textPrompt = """
                 You are an expert pharmacist. Below is raw OCR text extracted from a doctor's handwritten prescription.
                 The OCR may have errors, misspellings, and garbled characters. Use your medical knowledge to interpret it.
@@ -380,6 +422,10 @@ public class GeminiVisionService {
                         break; // try next model
                     } catch (HttpClientErrorException e) {
                         int status = e.getStatusCode().value();
+                        if (status == 401 || status == 403) {
+                            markAuthFailure(status);
+                            return Optional.empty();
+                        }
                         if (status == 429 && attempt < MAX_429_RETRIES) {
                             long delay = RETRY_DELAYS_MS[attempt];
                             logger.info("Text interpretation {} rate limited, waiting {}ms...", model, delay);
@@ -407,6 +453,11 @@ public class GeminiVisionService {
     public Optional<String> answerQuestion(String question, String prescriptionContext) {
         String apiKey = getEffectiveApiKey();
         if (apiKey == null || apiKey.isBlank() || question == null || question.isBlank()) {
+            return Optional.empty();
+        }
+
+        if (isAuthCooldownActive()) {
+            logger.warn("Skipping Gemini Q&A during auth cooldown");
             return Optional.empty();
         }
 
@@ -463,6 +514,11 @@ public class GeminiVisionService {
                         }
                         break;
                     } catch (HttpClientErrorException e) {
+                        int status = e.getStatusCode().value();
+                        if (status == 401 || status == 403) {
+                            markAuthFailure(status);
+                            return Optional.empty();
+                        }
                         if (e.getStatusCode().value() == 429 && attempt < MAX_429_RETRIES) {
                             try { Thread.sleep(RETRY_DELAYS_MS[attempt]); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                             continue;
@@ -480,5 +536,14 @@ public class GeminiVisionService {
         }
 
         return Optional.empty();
+    }
+
+    private boolean isAuthCooldownActive() {
+        return System.currentTimeMillis() < geminiAuthFailedUntilEpochMs;
+    }
+
+    private void markAuthFailure(int statusCode) {
+        geminiAuthFailedUntilEpochMs = System.currentTimeMillis() + authFailureCooldownMs;
+        logger.error("Gemini auth failed with HTTP {}. Disabling Gemini for {} ms.", statusCode, authFailureCooldownMs);
     }
 }

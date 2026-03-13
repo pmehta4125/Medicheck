@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { hasUploadedPrescription, UPLOAD_REQUIRED_MESSAGE } from "../utils/prescription";
+import { getAuthSession } from "../utils/auth";
 
 const BRAND_ALIAS_GROUPS = [
   ["paracetamol", "dolo", "calpol", "crocin"],
@@ -177,7 +178,11 @@ export default function BatchResults() {
   const location = useLocation();
 
   const getExtracted = () => JSON.parse(localStorage.getItem("extractedText")) || [];
-  const getHistory = () => JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
+  const getHistory = () => {
+    const all = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
+    const email = (getAuthSession()?.email || "").toLowerCase();
+    return email ? all.filter((e) => (e.ownerEmail || "").toLowerCase() === email) : all;
+  };
 
   const [extracted, setExtracted] = useState(getExtracted);
   const [savedHistory, setSavedHistory] = useState(getHistory);

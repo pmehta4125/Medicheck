@@ -1,6 +1,7 @@
 package com.example.medicheck_backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,6 +9,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -27,7 +29,27 @@ public class CloudOcrFallbackService {
     @Value("${ocr.cloud.google.api-key:}")
     private String googleVisionApiKey;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    @Value("${ocr.cloud.http.connect-timeout-ms:8000}")
+    private int connectTimeoutMs;
+
+    @Value("${ocr.cloud.http.read-timeout-ms:25000}")
+    private int readTimeoutMs;
+
+    private RestTemplate restTemplate;
+
+    @PostConstruct
+    void initRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeoutMs);
+        factory.setReadTimeout(readTimeoutMs);
+        this.restTemplate = new RestTemplate(factory);
+
+        logger.info(
+                "Google Vision fallback client configured with connectTimeout={}ms, readTimeout={}ms",
+                connectTimeoutMs,
+                readTimeoutMs
+        );
+    }
 
     public Optional<String> extractTextIfConfigured(File imageFile) {
         if (googleVisionApiKey == null || googleVisionApiKey.isBlank()) {

@@ -1142,17 +1142,20 @@ footer {
   font-weight: 700;
 }
 
-.status-pill.uploaded {
-  background: #ecf5ff;
-  color: #1d4ed8;
+.status-pill.uploaded,
+.status-pill.no-data {
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
-.status-pill.needs-review {
+.status-pill.needs-review,
+.status-pill.ocr-only {
   background: #fff7e7;
   color: #9a3412;
 }
 
-.status-pill.verified {
+.status-pill.verified,
+.status-pill.ai-analyzed {
   background: #ebfdf1;
   color: #166534;
 }
