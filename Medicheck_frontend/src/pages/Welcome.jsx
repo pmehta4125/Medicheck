@@ -20,7 +20,7 @@ export default function Welcome() {
         i++;
         setTimeout(type, 80); // slower typing
       } else {
-        setTimeout(() => setShowIntro(false), 2000); // keep visible for 2s
+        setTimeout(() => setShowIntro(false), 2000); // keep visible for 1.1s
       }
     };
     type();
