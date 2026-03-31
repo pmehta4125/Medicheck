@@ -329,6 +329,32 @@ export default function BatchResults() {
         <p className="no-data">No data found.</p>
       ) : (
         <>
+          {/* Comprehensive Readable Summary */}
+          <div className="result-card" style={{ background: '#f9fafb', marginBottom: 24 }}>
+            <h2 className="result-heading">Prescription Summary</h2>
+            <div style={{ fontSize: '1.05em', lineHeight: 1.7 }}>
+              {activeResult.doctorName && <div><strong>Doctor:</strong> {activeResult.doctorName}</div>}
+              {activeResult.patientName && <div><strong>Patient:</strong> {activeResult.patientName}</div>}
+              {activeResult.prescriptionDate && <div><strong>Date:</strong> {activeResult.prescriptionDate}</div>}
+              {activeResult.diagnosis && activeResult.diagnosis !== 'Not specified' && <div><strong>Diagnosis:</strong> {activeResult.diagnosis}</div>}
+              {activeResult.additionalNotes && <div><strong>Additional Notes:</strong> {activeResult.additionalNotes}</div>}
+              <div style={{ marginTop: 12 }}>
+                <strong>Medicines:</strong>
+                <ol style={{ margin: '8px 0 0 18px', padding: 0 }}>
+                  {(activeResult.medicines || []).map((med, idx) => (
+                    <li key={idx} style={{ marginBottom: 6 }}>
+                      <span style={{ fontWeight: 600 }}>{med.name}</span>
+                      {med.dosage && med.dosage !== 'Not specified' && <span> | <strong>Dosage:</strong> {med.dosage}</span>}
+                      {med.frequency && med.frequency !== 'As directed' && <span> | <strong>Frequency:</strong> {med.frequency}</span>}
+                      {med.duration && med.duration !== 'As prescribed' && <span> | <strong>Duration:</strong> {med.duration}</span>}
+                      {med.instructions && <span> | <strong>Instructions:</strong> {med.instructions}</span>}
+                    </li>
+                  ))}
+                </ol>
+                {(activeResult.medicines || []).length === 0 && <span>No medicines detected.</span>}
+              </div>
+            </div>
+          </div>
           <div className="result-card timeline-card">
             <h2 className="result-heading">Prescription Status</h2>
             <div className="status-timeline">
@@ -402,50 +428,44 @@ export default function BatchResults() {
           </div>
 
           <div className="result-card">
-            <h2 className="result-heading">Detected Medicines</h2>
+            <h2 className="result-heading">Your Medicines</h2>
             {medicinesWithConfidence.length > 0 ? (
-              <>
-                <div className="confidence-summary">
+              <div className="medicine-table-wrap">
+                <table className="medicine-table" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
+                  <thead>
+                    <tr style={{ background: "#f3f4f6" }}>
+                      <th style={{ padding: "8px", textAlign: "left" }}>Medicine Name</th>
+                      <th style={{ padding: "8px", textAlign: "left" }}>Dosage</th>
+                      <th style={{ padding: "8px", textAlign: "left" }}>Frequency</th>
+                      <th style={{ padding: "8px", textAlign: "left" }}>Duration</th>
+                      <th style={{ padding: "8px", textAlign: "left" }}>Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {medicinesWithConfidence.map((med, i) => (
+                      <tr key={`${med.name}-${i}`} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                        <td style={{ padding: "8px", fontWeight: 600 }}>{med.name}</td>
+                        <td style={{ padding: "8px" }}>{med.dosage || "Not specified"}</td>
+                        <td style={{ padding: "8px" }}>{med.frequency || "As directed"}</td>
+                        <td style={{ padding: "8px" }}>{med.duration || "As prescribed"}</td>
+                        <td style={{ padding: "8px" }}>
+                          <span className={`confidence-badge ${med.confidence.label.toLowerCase()}`}>{med.confidence.label} ({med.confidence.score})</span>
+                          {med.confidence.label === "Low" && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ color: "#dc2626", fontSize: "0.85em" }}>Needs review</span>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="confidence-summary" style={{ marginTop: 12 }}>
                   <span className="confidence-chip high">High: {confidenceSummary.high}</span>
                   <span className="confidence-chip medium">Medium: {confidenceSummary.medium}</span>
                   <span className="confidence-chip low">Needs Review: {confidenceSummary.low}</span>
                 </div>
-
-                <ul className="medicine-list">
-                  {medicinesWithConfidence.map((med, i) => (
-                    <li key={`${med.name}-${i}`} className="medicine-item">
-                      <div className="med-main-row">
-                        <span className="med-name">{med.name}</span>
-                        <span className={`confidence-badge ${med.confidence.label.toLowerCase()}`}>
-                          {med.confidence.label} ({med.confidence.score})
-                        </span>
-                      </div>
-
-                      <span className="med-dose">Dose: {med.dosage || "Not specified"}</span>
-                      <span className="med-dose">Frequency: {med.frequency || "As directed"}</span>
-                      <span className="med-dose">Duration: {med.duration || "As prescribed"}</span>
-
-                      {med.confidence.label === "Low" && (
-                        <div className="review-edit-wrap">
-                          <p className="review-text">Needs review: update medicine and dose</p>
-                          <input
-                            className="review-input"
-                            value={med.name || ""}
-                            onChange={(e) => updateMedicineField(i, "name", e.target.value)}
-                            placeholder="Correct medicine name"
-                          />
-                          <input
-                            className="review-input"
-                            value={med.dosage || ""}
-                            onChange={(e) => updateMedicineField(i, "dosage", e.target.value)}
-                            placeholder="Correct dosage"
-                          />
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
+              </div>
             ) : (
               <p className="no-med">No medicines detected.</p>
             )}
@@ -506,9 +526,9 @@ export default function BatchResults() {
               {activeResult.geminiAnalysis ? "AI Prescription Analysis" : "Full OCR Text"}
             </h2>
             <pre className="ocr-text" style={{ whiteSpace: "pre-wrap", fontFamily: activeResult.geminiAnalysis ? "inherit" : "monospace" }}>
-              {activeResult.raw || "No text available."}
+              {activeResult.rawText || activeResult.raw || "No text available."}
             </pre>
-            {activeResult.rawOriginal && activeResult.rawOriginal !== activeResult.raw ? (
+            {activeResult.rawOriginal && activeResult.rawOriginal !== (activeResult.rawText || activeResult.raw) ? (
               <details className="ocr-details">
                 <summary className="ocr-summary">Show Original Raw OCR (Debug)</summary>
                 <pre className="ocr-text">{activeResult.rawOriginal}</pre>
