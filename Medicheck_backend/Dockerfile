@@ -4,6 +4,9 @@ WORKDIR /app
 
 COPY . .
 
+# 🔥 ADD THIS LINE (IMPORTANT)
+RUN chmod +x mvnw
+
 RUN ./mvnw clean package -DskipTests
 
 EXPOSE 10000
