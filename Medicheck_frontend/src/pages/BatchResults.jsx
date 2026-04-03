@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { hasUploadedPrescription, UPLOAD_REQUIRED_MESSAGE } from "../utils/prescription";
 import { getAuthSession } from "../utils/auth";
 
+const prescriptionPreviewUrl = localStorage.getItem("prescriptionPreview") || "";
+
 const BRAND_ALIAS_GROUPS = [
   ["paracetamol", "dolo", "calpol", "crocin"],
   ["cetirizine", "cetzine"],
@@ -173,6 +175,29 @@ function stringifyRiskLevel(value = "") {
   return String(value || "").toLowerCase().replace(/\s+/g, "-");
 }
 
+function getFallbackNotice(result) {
+  if (!result?.usedFallback) return null;
+
+  if (result.fallbackReason === "ai_quota_exhausted") {
+    return {
+      title: "AI temporarily unavailable",
+      body: "The AI quota is temporarily exhausted, so this report is using backup OCR output. Results may need manual review.",
+    };
+  }
+
+  if (result.processingMode === "ocr_ai_interpretation") {
+    return {
+      title: "Backup processing used",
+      body: "Image AI reading was unavailable, so this report was built from OCR text plus AI interpretation. Please review low-confidence medicines carefully.",
+    };
+  }
+
+  return {
+    title: "Backup OCR used",
+    body: "This report was generated from backup OCR because AI analysis was unavailable. Please review medicines and dosage carefully before relying on the result.",
+  };
+}
+
 export default function BatchResults() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -204,6 +229,7 @@ export default function BatchResults() {
   }, [location.key]);
 
   const [chemistInput, setChemistInput] = useState("");
+  const [showPrescriptionImage, setShowPrescriptionImage] = useState(false);
 
   useEffect(() => {
     setEditableMedicines(activeResult?.medicines || []);
@@ -321,6 +347,8 @@ export default function BatchResults() {
     setEditableMedicines((prev) => prev.map((med, i) => (i === index ? { ...med, [field]: value } : med)));
   };
 
+  const fallbackNotice = getFallbackNotice(activeResult);
+
   return (
     <div className="results-container">
       <h1 className="results-title">Prescription Analysis Results</h1>
@@ -329,32 +357,22 @@ export default function BatchResults() {
         <p className="no-data">No data found.</p>
       ) : (
         <>
-          {/* Comprehensive Readable Summary */}
-          <div className="result-card" style={{ background: '#f9fafb', marginBottom: 24 }}>
-            <h2 className="result-heading">Prescription Summary</h2>
-            <div style={{ fontSize: '1.05em', lineHeight: 1.7 }}>
-              {activeResult.doctorName && <div><strong>Doctor:</strong> {activeResult.doctorName}</div>}
-              {activeResult.patientName && <div><strong>Patient:</strong> {activeResult.patientName}</div>}
-              {activeResult.prescriptionDate && <div><strong>Date:</strong> {activeResult.prescriptionDate}</div>}
-              {activeResult.diagnosis && activeResult.diagnosis !== 'Not specified' && <div><strong>Diagnosis:</strong> {activeResult.diagnosis}</div>}
-              {activeResult.additionalNotes && <div><strong>Additional Notes:</strong> {activeResult.additionalNotes}</div>}
-              <div style={{ marginTop: 12 }}>
-                <strong>Medicines:</strong>
-                <ol style={{ margin: '8px 0 0 18px', padding: 0 }}>
-                  {(activeResult.medicines || []).map((med, idx) => (
-                    <li key={idx} style={{ marginBottom: 6 }}>
-                      <span style={{ fontWeight: 600 }}>{med.name}</span>
-                      {med.dosage && med.dosage !== 'Not specified' && <span> | <strong>Dosage:</strong> {med.dosage}</span>}
-                      {med.frequency && med.frequency !== 'As directed' && <span> | <strong>Frequency:</strong> {med.frequency}</span>}
-                      {med.duration && med.duration !== 'As prescribed' && <span> | <strong>Duration:</strong> {med.duration}</span>}
-                      {med.instructions && <span> | <strong>Instructions:</strong> {med.instructions}</span>}
-                    </li>
-                  ))}
-                </ol>
-                {(activeResult.medicines || []).length === 0 && <span>No medicines detected.</span>}
-              </div>
+          {fallbackNotice ? (
+            <div
+              className="result-card"
+              style={{
+                borderLeft: "6px solid #d97706",
+                background: "#fff7ed",
+                marginBottom: "20px",
+              }}
+            >
+              <h2 className="result-heading" style={{ color: "#9a3412" }}>{fallbackNotice.title}</h2>
+              <p style={{ color: "#7c2d12", margin: 0, lineHeight: 1.6 }}>
+                {fallbackNotice.body}
+              </p>
             </div>
-          </div>
+          ) : null}
+
           <div className="result-card timeline-card">
             <h2 className="result-heading">Prescription Status</h2>
             <div className="status-timeline">
@@ -369,6 +387,37 @@ export default function BatchResults() {
               <button className="secondary-btn" onClick={() => window.print()}>Download / Share Report</button>
             </div>
           </div>
+
+          {/* Uploaded Prescription Image */}
+          {prescriptionPreviewUrl && (
+            <div className="result-card">
+              <h2
+                className="result-heading"
+                style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                onClick={() => setShowPrescriptionImage(prev => !prev)}
+              >
+                Uploaded Prescription
+                <span style={{ fontSize: "0.85rem", color: "#0d9488", fontWeight: 500 }}>
+                  {showPrescriptionImage ? "Hide ▲" : "View ▼"}
+                </span>
+              </h2>
+              {showPrescriptionImage && (
+                <div style={{ textAlign: "center", marginTop: "10px" }}>
+                  <img
+                    src={prescriptionPreviewUrl}
+                    alt="Uploaded prescription"
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "500px",
+                      borderRadius: "10px",
+                      border: "1px solid #e5e7eb",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Prescription Info — Doctor, Patient, Date, Diagnosis from AI */}
           {(activeResult.doctorName || activeResult.patientName || activeResult.prescriptionDate || activeResult.diagnosis) && (
@@ -428,44 +477,50 @@ export default function BatchResults() {
           </div>
 
           <div className="result-card">
-            <h2 className="result-heading">Your Medicines</h2>
+            <h2 className="result-heading">Detected Medicines</h2>
             {medicinesWithConfidence.length > 0 ? (
-              <div className="medicine-table-wrap">
-                <table className="medicine-table" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-                  <thead>
-                    <tr style={{ background: "#f3f4f6" }}>
-                      <th style={{ padding: "8px", textAlign: "left" }}>Medicine Name</th>
-                      <th style={{ padding: "8px", textAlign: "left" }}>Dosage</th>
-                      <th style={{ padding: "8px", textAlign: "left" }}>Frequency</th>
-                      <th style={{ padding: "8px", textAlign: "left" }}>Duration</th>
-                      <th style={{ padding: "8px", textAlign: "left" }}>Confidence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {medicinesWithConfidence.map((med, i) => (
-                      <tr key={`${med.name}-${i}`} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                        <td style={{ padding: "8px", fontWeight: 600 }}>{med.name}</td>
-                        <td style={{ padding: "8px" }}>{med.dosage || "Not specified"}</td>
-                        <td style={{ padding: "8px" }}>{med.frequency || "As directed"}</td>
-                        <td style={{ padding: "8px" }}>{med.duration || "As prescribed"}</td>
-                        <td style={{ padding: "8px" }}>
-                          <span className={`confidence-badge ${med.confidence.label.toLowerCase()}`}>{med.confidence.label} ({med.confidence.score})</span>
-                          {med.confidence.label === "Low" && (
-                            <div style={{ marginTop: 4 }}>
-                              <span style={{ color: "#dc2626", fontSize: "0.85em" }}>Needs review</span>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="confidence-summary" style={{ marginTop: 12 }}>
+              <>
+                <div className="confidence-summary">
                   <span className="confidence-chip high">High: {confidenceSummary.high}</span>
                   <span className="confidence-chip medium">Medium: {confidenceSummary.medium}</span>
                   <span className="confidence-chip low">Needs Review: {confidenceSummary.low}</span>
                 </div>
-              </div>
+
+                <ul className="medicine-list">
+                  {medicinesWithConfidence.map((med, i) => (
+                    <li key={`${med.name}-${i}`} className="medicine-item">
+                      <div className="med-main-row">
+                        <span className="med-name">{med.name}</span>
+                        <span className={`confidence-badge ${med.confidence.label.toLowerCase()}`}>
+                          {med.confidence.label} ({med.confidence.score})
+                        </span>
+                      </div>
+
+                      <span className="med-dose">Dose: {med.dosage || "Not specified"}</span>
+                      <span className="med-dose">Frequency: {med.frequency || "As directed"}</span>
+                      <span className="med-dose">Duration: {med.duration || "As prescribed"}</span>
+
+                      {med.confidence.label === "Low" && (
+                        <div className="review-edit-wrap">
+                          <p className="review-text">Needs review: update medicine and dose</p>
+                          <input
+                            className="review-input"
+                            value={med.name || ""}
+                            onChange={(e) => updateMedicineField(i, "name", e.target.value)}
+                            placeholder="Correct medicine name"
+                          />
+                          <input
+                            className="review-input"
+                            value={med.dosage || ""}
+                            onChange={(e) => updateMedicineField(i, "dosage", e.target.value)}
+                            placeholder="Correct dosage"
+                          />
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : (
               <p className="no-med">No medicines detected.</p>
             )}
@@ -526,9 +581,9 @@ export default function BatchResults() {
               {activeResult.geminiAnalysis ? "AI Prescription Analysis" : "Full OCR Text"}
             </h2>
             <pre className="ocr-text" style={{ whiteSpace: "pre-wrap", fontFamily: activeResult.geminiAnalysis ? "inherit" : "monospace" }}>
-              {activeResult.rawText || activeResult.raw || "No text available."}
+              {activeResult.raw || "No text available."}
             </pre>
-            {activeResult.rawOriginal && activeResult.rawOriginal !== (activeResult.rawText || activeResult.raw) ? (
+            {activeResult.rawOriginal && activeResult.rawOriginal !== activeResult.raw ? (
               <details className="ocr-details">
                 <summary className="ocr-summary">Show Original Raw OCR (Debug)</summary>
                 <pre className="ocr-text">{activeResult.rawOriginal}</pre>

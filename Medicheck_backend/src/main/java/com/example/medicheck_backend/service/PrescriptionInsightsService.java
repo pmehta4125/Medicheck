@@ -726,9 +726,8 @@ public class PrescriptionInsightsService {
 
         for (Map<String, String> medicine : medicines) {
             String name = medicine.getOrDefault("name", "UNKNOWN");
-            String normalized = normalizeName(name);
 
-            Map<String, String> meta = MEDICINE_INFO.getOrDefault(normalized, defaultInfo());
+            Map<String, String> meta = lookupMedicineInfo(name);
             Map<String, String> explanation = new LinkedHashMap<>();
             explanation.put("name", name);
             explanation.put("usedFor", meta.get("usedFor"));
@@ -821,6 +820,34 @@ public class PrescriptionInsightsService {
         return value.toLowerCase().replaceAll("[^a-z0-9]", "").trim();
     }
 
+    private Map<String, String> lookupMedicineInfo(String rawName) {
+        if (rawName == null || rawName.isBlank()) return defaultInfo();
+
+        // Try exact normalized match first
+        String normalized = normalizeName(rawName);
+        if (MEDICINE_INFO.containsKey(normalized)) {
+            return MEDICINE_INFO.get(normalized);
+        }
+
+        // Split on parentheses, slashes, hyphens, commas — try each token
+        String[] tokens = rawName.toLowerCase().split("[()\\[\\]/,\\-–—+&]+");
+        for (String token : tokens) {
+            String clean = token.replaceAll("[^a-z0-9]", "").trim();
+            if (!clean.isEmpty() && MEDICINE_INFO.containsKey(clean)) {
+                return MEDICINE_INFO.get(clean);
+            }
+        }
+
+        // Try partial: check if any known key is contained in the normalized name
+        for (Map.Entry<String, Map<String, String>> entry : MEDICINE_INFO.entrySet()) {
+            if (entry.getKey().length() >= 4 && normalized.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+
+        return defaultInfo();
+    }
+
     private static Map<String, Map<String, String>> createMedicineInfo() {
         Map<String, Map<String, String>> info = new HashMap<>();
 
@@ -841,6 +868,162 @@ public class PrescriptionInsightsService {
         info.put("omeprazole", medicineInfo("Acidity and reflux", "Headache, abdominal discomfort", "Long-term unsupervised use"));
         info.put("aspirin", medicineInfo("Blood thinning and heart protection", "Acidity, easy bruising", "Bleeding risk with unsupervised use"));
         info.put("lisinopril", medicineInfo("Blood pressure control", "Dry cough, dizziness", "Potassium supplements without advice"));
+
+        // Benzodiazepines & anxiolytics
+        info.put("lorazepam", medicineInfo("Anxiety and panic disorders", "Drowsiness, dizziness, weakness", "Alcohol, opioids, driving"));
+        info.put("ativan", medicineInfo("Anxiety and panic disorders", "Drowsiness, dizziness, weakness", "Alcohol, opioids, driving"));
+        info.put("clonazepam", medicineInfo("Seizures, panic disorder, anxiety", "Drowsiness, coordination problems, fatigue", "Alcohol, sedatives, abrupt discontinuation"));
+        info.put("rivotril", medicineInfo("Seizures, panic disorder, anxiety", "Drowsiness, coordination problems, fatigue", "Alcohol, sedatives, abrupt discontinuation"));
+        info.put("diazepam", medicineInfo("Anxiety, muscle spasms, seizures", "Drowsiness, fatigue, muscle weakness", "Alcohol, opioids, driving"));
+        info.put("valium", medicineInfo("Anxiety, muscle spasms, seizures", "Drowsiness, fatigue, muscle weakness", "Alcohol, opioids, driving"));
+        info.put("alprazolam", medicineInfo("Anxiety and panic attacks", "Drowsiness, lightheadedness, memory issues", "Alcohol, opioids, abrupt stopping"));
+        info.put("xanax", medicineInfo("Anxiety and panic attacks", "Drowsiness, lightheadedness, memory issues", "Alcohol, opioids, abrupt stopping"));
+
+        // Antidepressants
+        info.put("sertraline", medicineInfo("Depression, anxiety, OCD", "Nausea, insomnia, dizziness, dry mouth", "MAO inhibitors, abrupt discontinuation"));
+        info.put("serta", medicineInfo("Depression, anxiety, OCD", "Nausea, insomnia, dizziness, dry mouth", "MAO inhibitors, abrupt discontinuation"));
+        info.put("zoloft", medicineInfo("Depression, anxiety, OCD", "Nausea, insomnia, dizziness, dry mouth", "MAO inhibitors, abrupt discontinuation"));
+        info.put("fluoxetine", medicineInfo("Depression, anxiety, OCD", "Nausea, headache, insomnia", "MAO inhibitors, alcohol"));
+        info.put("prozac", medicineInfo("Depression, anxiety, OCD", "Nausea, headache, insomnia", "MAO inhibitors, alcohol"));
+        info.put("escitalopram", medicineInfo("Depression and generalized anxiety", "Nausea, insomnia, sexual dysfunction", "MAO inhibitors, abrupt stopping"));
+        info.put("cipralex", medicineInfo("Depression and generalized anxiety", "Nausea, insomnia, sexual dysfunction", "MAO inhibitors, abrupt stopping"));
+        info.put("amitriptyline", medicineInfo("Depression, nerve pain, migraine prevention", "Drowsiness, dry mouth, weight gain", "Alcohol, MAO inhibitors"));
+        info.put("venlafaxine", medicineInfo("Depression, anxiety, panic disorder", "Nausea, dizziness, sweating, insomnia", "MAO inhibitors, abrupt discontinuation"));
+        info.put("duloxetine", medicineInfo("Depression, anxiety, nerve pain", "Nausea, dry mouth, drowsiness", "MAO inhibitors, liver disease"));
+        info.put("mirtazapine", medicineInfo("Depression", "Drowsiness, weight gain, dry mouth", "Alcohol, MAO inhibitors"));
+
+        // Antipsychotics
+        info.put("olanzapine", medicineInfo("Schizophrenia, bipolar disorder", "Weight gain, drowsiness, dizziness", "Alcohol, driving initially"));
+        info.put("risperidone", medicineInfo("Schizophrenia, bipolar disorder", "Weight gain, drowsiness, restlessness", "Alcohol, driving initially"));
+        info.put("quetiapine", medicineInfo("Schizophrenia, bipolar disorder, depression", "Drowsiness, weight gain, dry mouth", "Alcohol, abrupt discontinuation"));
+        info.put("aripiprazole", medicineInfo("Schizophrenia, bipolar disorder", "Restlessness, insomnia, nausea", "Alcohol, driving initially"));
+        info.put("haloperidol", medicineInfo("Psychosis, severe agitation", "Muscle stiffness, tremors, restlessness", "Alcohol, CNS depressants"));
+
+        // Anticholinergics / Parkinson's
+        info.put("trihexyphenidyl", medicineInfo("Parkinson's disease, drug-induced movement disorders", "Dry mouth, blurred vision, constipation", "Glaucoma, urinary retention, heat exposure"));
+        info.put("pacitane", medicineInfo("Parkinson's disease, drug-induced movement disorders", "Dry mouth, blurred vision, constipation", "Glaucoma, urinary retention, heat exposure"));
+        info.put("levodopa", medicineInfo("Parkinson's disease", "Nausea, dizziness, involuntary movements", "MAO inhibitors without supervision"));
+        info.put("carbidopa", medicineInfo("Parkinson's disease (with levodopa)", "Nausea, dizziness, headache", "MAO inhibitors without supervision"));
+
+        // Mood stabilizers / Anticonvulsants
+        info.put("lithium", medicineInfo("Bipolar disorder", "Tremor, thirst, frequent urination, nausea", "Dehydration, NSAIDs without monitoring"));
+        info.put("valproate", medicineInfo("Epilepsy, bipolar disorder, migraine prevention", "Nausea, weight gain, tremor, hair loss", "Pregnancy, liver disease"));
+        info.put("valproicacid", medicineInfo("Epilepsy, bipolar disorder, migraine prevention", "Nausea, weight gain, tremor, hair loss", "Pregnancy, liver disease"));
+        info.put("depakote", medicineInfo("Epilepsy, bipolar disorder, migraine prevention", "Nausea, weight gain, tremor, hair loss", "Pregnancy, liver disease"));
+        info.put("carbamazepine", medicineInfo("Epilepsy, nerve pain, bipolar disorder", "Dizziness, drowsiness, nausea", "MAO inhibitors, pregnancy"));
+        info.put("tegretol", medicineInfo("Epilepsy, nerve pain, bipolar disorder", "Dizziness, drowsiness, nausea", "MAO inhibitors, pregnancy"));
+        info.put("lamotrigine", medicineInfo("Epilepsy, bipolar disorder", "Headache, dizziness, rash", "Abrupt discontinuation, rash requires immediate doctor visit"));
+        info.put("gabapentin", medicineInfo("Nerve pain, epilepsy", "Dizziness, drowsiness, fatigue", "Alcohol, driving initially"));
+        info.put("pregabalin", medicineInfo("Nerve pain, anxiety, epilepsy", "Dizziness, drowsiness, weight gain", "Alcohol, driving initially"));
+        info.put("lyrica", medicineInfo("Nerve pain, anxiety, epilepsy", "Dizziness, drowsiness, weight gain", "Alcohol, driving initially"));
+
+        // Pain / NSAIDs
+        info.put("diclofenac", medicineInfo("Pain and inflammation", "Stomach upset, nausea, dizziness", "Ulcer history, kidney disease, long-term use"));
+        info.put("naproxen", medicineInfo("Pain, inflammation, arthritis", "Stomach upset, headache, dizziness", "Ulcer history, kidney disease"));
+        info.put("tramadol", medicineInfo("Moderate to severe pain", "Nausea, dizziness, constipation, drowsiness", "Alcohol, seizure history, MAO inhibitors"));
+        info.put("codeine", medicineInfo("Mild to moderate pain, cough", "Drowsiness, constipation, nausea", "Alcohol, driving, children under 12"));
+        info.put("morphine", medicineInfo("Severe pain", "Drowsiness, constipation, nausea, respiratory depression", "Alcohol, driving, unsupervised use"));
+        info.put("aceclofenac", medicineInfo("Pain and inflammation", "Stomach upset, nausea, dizziness", "Ulcer history, kidney disease"));
+        info.put("piroxicam", medicineInfo("Arthritis, pain, inflammation", "Stomach upset, dizziness", "Ulcer history, kidney disease"));
+        info.put("etoricoxib", medicineInfo("Pain, arthritis, gout", "Headache, swelling, high BP", "Heart disease, ulcers"));
+
+        // Antibiotics
+        info.put("ciprofloxacin", medicineInfo("Bacterial infections (UTI, respiratory)", "Nausea, diarrhea, dizziness", "Tendon problems, antacids with the dose"));
+        info.put("levofloxacin", medicineInfo("Bacterial infections", "Nausea, diarrhea, headache", "Tendon problems, sun exposure"));
+        info.put("doxycycline", medicineInfo("Bacterial and acne infections", "Nausea, sun sensitivity, esophageal irritation", "Antacids, dairy near dose time, sun exposure"));
+        info.put("metronidazole", medicineInfo("Bacterial and parasitic infections", "Nausea, metallic taste, headache", "Alcohol (causes severe reaction)"));
+        info.put("flagyl", medicineInfo("Bacterial and parasitic infections", "Nausea, metallic taste, headache", "Alcohol (causes severe reaction)"));
+        info.put("cephalexin", medicineInfo("Bacterial infections", "Nausea, diarrhea, stomach pain", "Unnecessary antibiotic overlap"));
+        info.put("cefixime", medicineInfo("Bacterial infections", "Diarrhea, nausea, stomach pain", "Unnecessary antibiotic overlap"));
+        info.put("clindamycin", medicineInfo("Bacterial and skin infections", "Diarrhea, nausea, abdominal pain", "Colitis history"));
+
+        // Cardiovascular
+        info.put("amlodipine", medicineInfo("High blood pressure, angina", "Swelling in ankles, dizziness, flushing", "Grapefruit juice excess"));
+        info.put("losartan", medicineInfo("High blood pressure, kidney protection", "Dizziness, fatigue, hyperkalemia", "Pregnancy, potassium supplements"));
+        info.put("telmisartan", medicineInfo("High blood pressure", "Dizziness, back pain, diarrhea", "Pregnancy, potassium supplements"));
+        info.put("metoprolol", medicineInfo("High blood pressure, heart rate control", "Fatigue, dizziness, cold extremities", "Abrupt discontinuation, asthma"));
+        info.put("atenolol", medicineInfo("High blood pressure, angina", "Fatigue, dizziness, cold hands/feet", "Abrupt stopping, asthma"));
+        info.put("propranolol", medicineInfo("High blood pressure, anxiety tremor, migraine", "Fatigue, dizziness, cold extremities", "Abrupt stopping, asthma"));
+        info.put("ramipril", medicineInfo("High blood pressure, heart protection", "Dry cough, dizziness, fatigue", "Pregnancy, potassium supplements"));
+        info.put("enalapril", medicineInfo("High blood pressure, heart failure", "Dry cough, dizziness, headache", "Pregnancy, potassium supplements"));
+        info.put("clopidogrel", medicineInfo("Blood clot prevention", "Bleeding, bruising, stomach upset", "Active bleeding, surgery without doctor advice"));
+        info.put("warfarin", medicineInfo("Blood clot prevention", "Bleeding, bruising", "Alcohol, inconsistent vitamin K intake, surgery"));
+        info.put("furosemide", medicineInfo("Fluid retention, heart failure, high BP", "Frequent urination, dizziness, dehydration", "Dehydration, electrolyte imbalance"));
+        info.put("lasix", medicineInfo("Fluid retention, heart failure, high BP", "Frequent urination, dizziness, dehydration", "Dehydration, electrolyte imbalance"));
+        info.put("hydrochlorothiazide", medicineInfo("High blood pressure, fluid retention", "Dizziness, frequent urination, electrolyte loss", "Dehydration, gout"));
+        info.put("spironolactone", medicineInfo("Fluid retention, heart failure, high BP", "Hyperkalemia, dizziness, breast tenderness", "Potassium supplements, kidney failure"));
+        info.put("digoxin", medicineInfo("Heart failure, atrial fibrillation", "Nausea, dizziness, visual disturbance", "Electrolyte imbalance, toxicity risk"));
+
+        // Diabetes
+        info.put("glimepiride", medicineInfo("Type 2 diabetes", "Low blood sugar, weight gain, nausea", "Skipping meals, alcohol"));
+        info.put("gliclazide", medicineInfo("Type 2 diabetes", "Low blood sugar, weight gain", "Skipping meals, alcohol"));
+        info.put("sitagliptin", medicineInfo("Type 2 diabetes", "Headache, upper respiratory infection", "Kidney impairment without dose adjustment"));
+        info.put("januvia", medicineInfo("Type 2 diabetes", "Headache, upper respiratory infection", "Kidney impairment without dose adjustment"));
+        info.put("insulin", medicineInfo("Diabetes (Type 1 and Type 2)", "Low blood sugar, weight gain, injection site reaction", "Skipping meals, incorrect dosing"));
+        info.put("pioglitazone", medicineInfo("Type 2 diabetes", "Weight gain, fluid retention, bone fractures", "Heart failure, bladder cancer history"));
+
+        // Respiratory / Asthma
+        info.put("salbutamol", medicineInfo("Asthma, bronchospasm relief", "Tremor, palpitations, headache", "Overuse without controller inhaler"));
+        info.put("montelukast", medicineInfo("Asthma, allergic rhinitis", "Headache, stomach pain, mood changes", "Replacing rescue inhaler"));
+        info.put("budesonide", medicineInfo("Asthma, inflammatory bowel disease", "Oral thrush, hoarse voice, headache", "Abrupt stopping of long-term use"));
+        info.put("theophylline", medicineInfo("Asthma, COPD", "Nausea, headache, insomnia, palpitations", "Caffeine excess, smoking changes"));
+
+        // GI / Stomach
+        info.put("ranitidine", medicineInfo("Acidity, ulcers", "Headache, constipation", "Long-term unsupervised use"));
+        info.put("domperidone", medicineInfo("Nausea, vomiting, bloating", "Dry mouth, headache", "Heart rhythm disorders"));
+        info.put("ondansetron", medicineInfo("Nausea and vomiting", "Headache, constipation, dizziness", "Heart rhythm disorders at high doses"));
+        info.put("sucralfate", medicineInfo("Stomach ulcers", "Constipation, dry mouth", "Taking with other medicines (space by 2 hrs)"));
+        info.put("loperamide", medicineInfo("Diarrhea", "Constipation, dizziness, nausea", "Bacterial diarrhea, children under 2"));
+        info.put("bisacodyl", medicineInfo("Constipation", "Stomach cramps, diarrhea", "Long-term daily use"));
+        info.put("lactulose", medicineInfo("Constipation, liver disease", "Bloating, gas, stomach cramps", "Diabetics without monitoring"));
+
+        // Thyroid
+        info.put("levothyroxine", medicineInfo("Hypothyroidism", "Weight changes, palpitations, insomnia", "Taking with calcium/iron (space by 4 hrs)"));
+        info.put("thyronorm", medicineInfo("Hypothyroidism", "Weight changes, palpitations, insomnia", "Taking with calcium/iron (space by 4 hrs)"));
+        info.put("eltroxin", medicineInfo("Hypothyroidism", "Weight changes, palpitations, insomnia", "Taking with calcium/iron (space by 4 hrs)"));
+
+        // Steroids
+        info.put("prednisolone", medicineInfo("Inflammation, allergies, autoimmune conditions", "Weight gain, mood changes, high blood sugar", "Abrupt stopping, infections"));
+        info.put("prednisone", medicineInfo("Inflammation, allergies, autoimmune conditions", "Weight gain, mood changes, high blood sugar", "Abrupt stopping, infections"));
+        info.put("dexamethasone", medicineInfo("Severe inflammation, allergies, nausea", "Insomnia, mood changes, high blood sugar", "Infections, abrupt stopping"));
+        info.put("hydrocortisone", medicineInfo("Adrenal insufficiency, inflammation", "Weight gain, fluid retention, high blood sugar", "Infections, abrupt stopping"));
+        info.put("methylprednisolone", medicineInfo("Inflammation, allergies", "Stomach upset, mood changes, insomnia", "Infections, live vaccines"));
+
+        // Vitamins / Supplements
+        info.put("calciumcarbonate", medicineInfo("Calcium deficiency, bone health", "Constipation, bloating", "Taking with iron or thyroid meds at same time"));
+        info.put("shelcal", medicineInfo("Calcium and vitamin D supplement", "Constipation, bloating", "Taking with iron or thyroid meds at same time"));
+        info.put("vitaminb12", medicineInfo("B12 deficiency, nerve health", "Generally well-tolerated", "Masking B12 deficiency with folic acid alone"));
+        info.put("methylcobalamin", medicineInfo("Nerve pain, B12 deficiency", "Generally well-tolerated", "None significant"));
+        info.put("ferroussulfate", medicineInfo("Iron deficiency anemia", "Constipation, dark stools, nausea", "Tea/coffee near dose, antacids"));
+        info.put("folicacid", medicineInfo("Folate deficiency, pregnancy support", "Generally well-tolerated", "Masking B12 deficiency"));
+        info.put("cholecalciferol", medicineInfo("Vitamin D deficiency", "Generally well-tolerated in normal doses", "Excess dosing without monitoring"));
+        info.put("vitamind3", medicineInfo("Vitamin D deficiency", "Generally well-tolerated in normal doses", "Excess dosing without monitoring"));
+
+        // Muscle relaxants
+        info.put("chlorzoxazone", medicineInfo("Muscle spasm and pain", "Drowsiness, dizziness, nausea", "Alcohol, liver disease"));
+        info.put("tizanidine", medicineInfo("Muscle spasticity", "Drowsiness, dry mouth, dizziness", "Alcohol, fluvoxamine, ciprofloxacin"));
+        info.put("cyclobenzaprine", medicineInfo("Muscle spasms", "Drowsiness, dry mouth, dizziness", "MAO inhibitors, heart disease"));
+        info.put("baclofen", medicineInfo("Muscle spasticity", "Drowsiness, weakness, dizziness", "Abrupt discontinuation, alcohol"));
+
+        // Antihistamines
+        info.put("levocetirizine", medicineInfo("Allergies, hay fever, hives", "Drowsiness, dry mouth, fatigue", "Alcohol, driving initially"));
+        info.put("fexofenadine", medicineInfo("Allergies, hay fever, hives", "Headache, nausea", "Fruit juice near dose (reduces absorption)"));
+        info.put("allegra", medicineInfo("Allergies, hay fever, hives", "Headache, nausea", "Fruit juice near dose (reduces absorption)"));
+        info.put("chlorpheniramine", medicineInfo("Allergies, cold symptoms", "Drowsiness, dry mouth, dizziness", "Alcohol, driving, sedatives"));
+        info.put("diphenhydramine", medicineInfo("Allergies, insomnia, cold symptoms", "Drowsiness, dry mouth, dizziness", "Alcohol, driving, children under 2"));
+        info.put("benadryl", medicineInfo("Allergies, insomnia, cold symptoms", "Drowsiness, dry mouth, dizziness", "Alcohol, driving, children under 2"));
+        info.put("hydroxyzine", medicineInfo("Anxiety, allergies, itching", "Drowsiness, dry mouth, dizziness", "Alcohol, driving, CNS depressants"));
+
+        // Sleep
+        info.put("zolpidem", medicineInfo("Insomnia", "Drowsiness, dizziness, headache", "Alcohol, driving, long-term use"));
+        info.put("zopiclone", medicineInfo("Insomnia", "Metallic taste, drowsiness, dry mouth", "Alcohol, driving, long-term use"));
+        info.put("melatonin", medicineInfo("Sleep regulation", "Drowsiness, headache", "Driving immediately after"));
+
+        // Antifungal
+        info.put("fluconazole", medicineInfo("Fungal infections", "Nausea, headache, abdominal pain", "Liver disease, certain heart medications"));
+        info.put("itraconazole", medicineInfo("Fungal infections", "Nausea, headache, rash", "Heart failure, liver disease"));
+        info.put("clotrimazole", medicineInfo("Skin and vaginal fungal infections", "Skin irritation, burning sensation", "Eye contact"));
+        info.put("terbinafine", medicineInfo("Fungal skin and nail infections", "Headache, stomach upset, taste disturbance", "Liver disease"));
 
         return info;
     }

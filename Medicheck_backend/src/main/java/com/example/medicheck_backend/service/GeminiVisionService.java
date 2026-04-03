@@ -17,11 +17,13 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Uses Google Gemini AI Vision to interpret prescription images.
@@ -34,6 +36,9 @@ public class GeminiVisionService {
 
     @Value("${gemini.api-key:}")
     private String geminiApiKey;
+
+    @Value("${gemini.api-key-backup:}")
+    private String geminiApiKeyBackup;
 
     @Value("${ocr.cloud.google.api-key:}")
     private String googleApiKey;
@@ -54,9 +59,17 @@ public class GeminiVisionService {
         return googleApiKey;
     }
 
+    private String getBackupApiKey() {
+        if (geminiApiKeyBackup != null && !geminiApiKeyBackup.isBlank()) {
+            return geminiApiKeyBackup;
+        }
+        return null;
+    }
+
     private RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private volatile long geminiAuthFailedUntilEpochMs = 0L;
+    private volatile long geminiQuotaExceededAtEpochMs = 0L;
 
     private static final String GEMINI_ENDPOINT_TEMPLATE =
             "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s";
@@ -64,11 +77,12 @@ public class GeminiVisionService {
     private static final String[] MODELS_TO_TRY = {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
-            "gemini-2.0-flash"
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite"
     };
 
-    private static final int MAX_429_RETRIES = 2;
-    private static final long[] RETRY_DELAYS_MS = {2000, 5000};
+    private static final int MAX_429_RETRIES = 1;
+    private static final long[] RETRY_DELAYS_MS = {1000};
 
     @PostConstruct
     void initRestTemplate() {
@@ -141,8 +155,10 @@ public class GeminiVisionService {
             """;
 
     public Optional<String> analyzePrescription(File imageFile) {
-        String apiKey = getEffectiveApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
+        String primaryKey = getEffectiveApiKey();
+        String backupKey = getBackupApiKey();
+
+        if ((primaryKey == null || primaryKey.isBlank()) && (backupKey == null || backupKey.isBlank())) {
             logger.warn("No API key configured for Gemini, skipping");
             return Optional.empty();
         }
@@ -151,6 +167,11 @@ public class GeminiVisionService {
             logger.warn("Gemini temporarily disabled due to recent auth failure");
             return Optional.empty();
         }
+
+        // Build a list of API keys to try (primary first, then backup if available)
+        List<String> keysToTry = new ArrayList<>();
+        if (primaryKey != null && !primaryKey.isBlank()) keysToTry.add(primaryKey);
+        if (backupKey != null && !backupKey.isBlank() && !backupKey.equals(primaryKey)) keysToTry.add(backupKey);
 
         try {
             byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
@@ -161,76 +182,99 @@ public class GeminiVisionService {
             Map<String, Object> payload = buildPayload(base64Image, mimeType);
             String jsonPayload = objectMapper.writeValueAsString(payload);
 
-            logger.info("Gemini payload size: {} bytes, image mime: {}", jsonPayload.length(), mimeType);
-            logger.info("Using Gemini API key: {}...", apiKey.substring(0, Math.min(10, apiKey.length())));
-
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> request = new HttpEntity<>(jsonPayload, headers);
 
-            // Try models with 429 retry logic
-            for (String model : MODELS_TO_TRY) {
-                for (int attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-                    String url = String.format(GEMINI_ENDPOINT_TEMPLATE, model, apiKey);
-                    logger.info("Trying Gemini {} (attempt {})", model, attempt + 1);
+            for (String apiKey : keysToTry) {
+                logger.info("Gemini payload size: {} bytes, image mime: {}", jsonPayload.length(), mimeType);
+                logger.info("Using Gemini API key: {}...", apiKey.substring(0, Math.min(10, apiKey.length())));
 
-                    try {
-                        ResponseEntity<JsonNode> response = restTemplate.postForEntity(url, request, JsonNode.class);
-                        JsonNode body = response.getBody();
+                boolean allModels429 = true;
 
-                        if (body == null) {
-                            logger.warn("Gemini {} returned null body", model);
-                            break; // try next model
-                        }
+                // Try models with 429 retry logic
+                for (String model : MODELS_TO_TRY) {
+                    for (int attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+                        String url = String.format(GEMINI_ENDPOINT_TEMPLATE, model, apiKey);
+                        logger.info("Trying Gemini {} (attempt {})", model, attempt + 1);
 
-                        logger.info("Gemini {} response status: {}", model, response.getStatusCode());
+                        try {
+                            ResponseEntity<JsonNode> response = restTemplate.postForEntity(url, request, JsonNode.class);
+                            JsonNode body = response.getBody();
 
-                        String text = body.at("/candidates/0/content/parts/0/text").asText("").trim();
+                            if (body == null) {
+                                logger.warn("Gemini {} returned null body", model);
+                                allModels429 = false;
+                                break; // try next model
+                            }
 
-                        if (!text.isBlank() && text.length() > 20) {
-                            logger.info("Gemini {} succeeded, response: {} chars", model, text.length());
+                            logger.info("Gemini {} response status: {}", model, response.getStatusCode());
 
-                            // Check if response actually contains medicines
-                            if (containsMedicines(text)) {
+                            String text = body.at("/candidates/0/content/parts/0/text").asText("").trim();
+
+                            if (!text.isBlank() && text.length() > 20) {
+                                logger.info("Gemini {} succeeded, response: {} chars", model, text.length());
+
+                                // Check if response actually contains medicines
+                                if (containsMedicines(text)) {
+                                    return Optional.of(text);
+                                }
+
+                                // First attempt didn't find medicines — retry with aggressive prompt
+                                logger.info("First Gemini response had no medicines, retrying with aggressive prompt...");
+                                Optional<String> retryResult = retryWithAggressivePrompt(base64Image, mimeType, apiKey, model);
+                                if (retryResult.isPresent()) {
+                                    return Optional.of(mergeGeminiResults(text, retryResult.get()));
+                                }
                                 return Optional.of(text);
                             }
 
-                            // First attempt didn't find medicines — retry with aggressive prompt
-                            logger.info("First Gemini response had no medicines, retrying with aggressive prompt...");
-                            Optional<String> retryResult = retryWithAggressivePrompt(base64Image, mimeType, apiKey, model);
-                            if (retryResult.isPresent()) {
-                                return Optional.of(mergeGeminiResults(text, retryResult.get()));
+                            logger.warn("Gemini {} returned insufficient text (length={})", model, text.length());
+                            allModels429 = false;
+                            break; // try next model
+
+                        } catch (HttpClientErrorException e) {
+                            int status = e.getStatusCode().value();
+                            if (status == 401) {
+                                markAuthFailure(status);
+                                return Optional.empty();
                             }
-                            return Optional.of(text);
+                            if (status == 403) {
+                                logger.warn("Gemini {} returned 403 (model not available), trying next model...", model);
+                                allModels429 = false;
+                                break; // try next model
+                            }
+                            if (status == 429 && attempt < MAX_429_RETRIES) {
+                                markQuotaExceeded();
+                                long delay = RETRY_DELAYS_MS[attempt];
+                                logger.info("Gemini {} rate limited (429), waiting {}ms before retry...", model, delay);
+                                try { Thread.sleep(delay); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                                continue; // retry same model
+                            }
+                            if (status == 429) {
+                                markQuotaExceeded();
+                            } else {
+                                allModels429 = false;
+                            }
+                            String responseBody = e.getResponseBodyAsString();
+                            String snippet = responseBody == null ? "" : responseBody.substring(0, Math.min(200, responseBody.length()));
+                            logger.warn("Gemini {} HTTP error {}: {}", model, e.getStatusCode(), snippet);
+                            break; // try next model
+                        } catch (Exception e) {
+                            logger.warn("Gemini {} failed: {} - {}", model, e.getClass().getSimpleName(), e.getMessage());
+                            allModels429 = false;
+                            break; // try next model
                         }
-
-                        logger.warn("Gemini {} returned insufficient text (length={})", model, text.length());
-                        break; // try next model
-
-                    } catch (HttpClientErrorException e) {
-                        int status = e.getStatusCode().value();
-                        if (status == 401 || status == 403) {
-                            markAuthFailure(status);
-                            return Optional.empty();
-                        }
-                        if (status == 429 && attempt < MAX_429_RETRIES) {
-                            long delay = RETRY_DELAYS_MS[attempt];
-                            logger.info("Gemini {} rate limited (429), waiting {}ms before retry...", model, delay);
-                            try { Thread.sleep(delay); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-                            continue; // retry same model
-                        }
-                        String responseBody = e.getResponseBodyAsString();
-                        String snippet = responseBody == null ? "" : responseBody.substring(0, Math.min(200, responseBody.length()));
-                        logger.warn("Gemini {} HTTP error {}: {}", model, e.getStatusCode(), snippet);
-                        break; // try next model
-                    } catch (Exception e) {
-                        logger.warn("Gemini {} failed: {} - {}", model, e.getClass().getSimpleName(), e.getMessage());
-                        break; // try next model
                     }
                 }
+
+                if (!allModels429) {
+                    break; // non-quota error, no point trying backup key
+                }
+                logger.info("All models returned 429 for this key, trying next key if available...");
             }
 
-            logger.warn("All Gemini models failed");
+            logger.warn("All Gemini models/keys failed");
             return Optional.empty();
 
         } catch (Exception ex) {
@@ -422,15 +466,23 @@ public class GeminiVisionService {
                         break; // try next model
                     } catch (HttpClientErrorException e) {
                         int status = e.getStatusCode().value();
-                        if (status == 401 || status == 403) {
+                        if (status == 401) {
                             markAuthFailure(status);
                             return Optional.empty();
                         }
+                        if (status == 403) {
+                            logger.warn("Text interpretation {} returned 403, trying next model...", model);
+                            break;
+                        }
                         if (status == 429 && attempt < MAX_429_RETRIES) {
+                            markQuotaExceeded();
                             long delay = RETRY_DELAYS_MS[attempt];
                             logger.info("Text interpretation {} rate limited, waiting {}ms...", model, delay);
                             try { Thread.sleep(delay); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                             continue;
+                        }
+                        if (status == 429) {
+                            markQuotaExceeded();
                         }
                         logger.warn("Text interpretation {} HTTP error: {}", model, e.getStatusCode());
                         break;
@@ -515,13 +567,21 @@ public class GeminiVisionService {
                         break;
                     } catch (HttpClientErrorException e) {
                         int status = e.getStatusCode().value();
-                        if (status == 401 || status == 403) {
+                        if (status == 401) {
                             markAuthFailure(status);
                             return Optional.empty();
                         }
+                        if (status == 403) {
+                            logger.warn("AI Q&A {} returned 403, trying next model...", model);
+                            break;
+                        }
                         if (e.getStatusCode().value() == 429 && attempt < MAX_429_RETRIES) {
+                            markQuotaExceeded();
                             try { Thread.sleep(RETRY_DELAYS_MS[attempt]); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                             continue;
+                        }
+                        if (status == 429) {
+                            markQuotaExceeded();
                         }
                         logger.warn("AI Q&A {} error: {}", model, e.getStatusCode());
                         break;
@@ -545,5 +605,14 @@ public class GeminiVisionService {
     private void markAuthFailure(int statusCode) {
         geminiAuthFailedUntilEpochMs = System.currentTimeMillis() + authFailureCooldownMs;
         logger.error("Gemini auth failed with HTTP {}. Disabling Gemini for {} ms.", statusCode, authFailureCooldownMs);
+    }
+
+    public boolean wasQuotaExceededRecently() {
+        long threshold = System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(10);
+        return geminiQuotaExceededAtEpochMs >= threshold;
+    }
+
+    private void markQuotaExceeded() {
+        geminiQuotaExceededAtEpochMs = System.currentTimeMillis();
     }
 }

@@ -41,7 +41,7 @@ export default function AdminDashboard() {
 
       let userCount = 0;
       try {
-        const res = await fetch("/analyze/stats");
+        const res = await fetch(apiUrl("/analyze/stats"));
         if (res.ok) {
           const data = await res.json();
           userCount = data.userCount || 0;

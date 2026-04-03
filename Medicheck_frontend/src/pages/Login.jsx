@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { saveAuthSession } from "../utils/auth";
 import { clearPrescriptionUploadFlag } from "../utils/prescription";
 import { showToast } from "../utils/toast";
+import { apiUrl } from "../utils/api";
 import "./login.css";
 
 export default function Login() {
@@ -19,7 +20,7 @@ export default function Login() {
     e.preventDefault();
 
     try {
-      const res = await fetch("/auth/login", {
+      const res = await fetch(apiUrl("/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -51,7 +52,7 @@ export default function Login() {
     }
 
     try {
-      const res = await fetch("/auth/google", {
+      const res = await fetch(apiUrl("/auth/google"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken: credentialResponse.credential }),

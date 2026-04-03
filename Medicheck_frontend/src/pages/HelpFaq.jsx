@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiUrl } from "../utils/api";
 
 const FAQS = [
   {
@@ -66,7 +67,7 @@ export default function HelpFaq() {
     setLoading(true);
 
     try {
-      const res = await fetch("/analyze/ask", {
+      const res = await fetch(apiUrl("/analyze/ask"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -46,6 +46,7 @@ public class OCRController {
 
         try {
             logger.info("=== OCR Analysis Request Started ===");
+
             if (upload == null) {
                 logger.warn("No file provided. Expected multipart key 'file' or 'image'.");
                 Map<String, String> error = new HashMap<>();
@@ -130,6 +131,8 @@ public class OCRController {
                 response.put("text", geminiText);
                 response.put("geminiAnalysis", geminiText);
                 response.put("message", "Prescription analyzed successfully using AI Vision");
+                response.put("processingMode", "ai_vision");
+                response.put("usedFallback", false);
                 response.putAll(insights);
             } else {
                 // Fallback: Gemini Vision failed. Try OCR + Gemini text interpretation hybrid.
@@ -138,7 +141,10 @@ public class OCRController {
                 logger.info("OCR extraction completed, length: {} characters", extractedText.length());
 
                 // Try sending OCR text to Gemini for intelligent interpretation
-                Optional<String> textInterpretation = geminiVisionService.interpretOcrText(extractedText);
+                // Skip if quota was just exhausted during analyzePrescription — no point retrying immediately
+                Optional<String> textInterpretation = geminiVisionService.wasQuotaExceededRecently()
+                        ? Optional.empty()
+                        : geminiVisionService.interpretOcrText(extractedText);
 
                 if (textInterpretation.isPresent() && textInterpretation.get().length() > 30) {
                     String geminiText = textInterpretation.get();
@@ -150,6 +156,9 @@ public class OCRController {
                     response.put("text", geminiText);
                     response.put("geminiAnalysis", geminiText);
                     response.put("message", "Prescription analyzed using OCR + AI text interpretation");
+                    response.put("processingMode", "ocr_ai_interpretation");
+                    response.put("usedFallback", true);
+                    response.put("fallbackReason", geminiVisionService.wasQuotaExceededRecently() ? "ai_quota_exhausted" : "ai_vision_unavailable");
                     response.putAll(insights);
                 } else {
                     // Pure OCR fallback (no Gemini at all)
@@ -159,6 +168,9 @@ public class OCRController {
                     response.put("rawText", extractedText);
                     response.put("text", insights.getOrDefault("simpleEnglishText", insights.getOrDefault("cleanedText", extractedText)));
                     response.put("message", "Prescription analyzed using OCR only");
+                    response.put("processingMode", "ocr_only");
+                    response.put("usedFallback", true);
+                    response.put("fallbackReason", geminiVisionService.wasQuotaExceededRecently() ? "ai_quota_exhausted" : "ai_unavailable");
                     response.putAll(insights);
                 }
             }
