@@ -1,14 +1,15 @@
-FROM eclipse-temurin:17-jdk-alpine
+# Step 1: Build stage
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 
 WORKDIR /app
-
 COPY . .
+RUN mvn clean package -DskipTests
 
-# 🔥 ADD THIS LINE (IMPORTANT)
-RUN chmod +x mvnw
+# Step 2: Run stage
+FROM eclipse-temurin:17-jdk
 
-RUN ./mvnw clean package -DskipTests
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 
-EXPOSE 10000
-
-CMD ["java", "-jar", "target/*.jar"]
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]
