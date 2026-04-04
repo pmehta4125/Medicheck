@@ -560,13 +560,6 @@ export default function BatchResults() {
                       <button className="secondary-btn" onClick={() => openFromHistory(entry)}>
                         View Result Again
                       </button>
-                      <button
-                        className="secondary-btn"
-                        style={{ color: "#dc2626", borderColor: "#dc2626" }}
-                        onClick={() => removeFromHistory(entry.id)}
-                      >
-                        Remove
-                      </button>
                     </div>
                   </li>
                 ))}
