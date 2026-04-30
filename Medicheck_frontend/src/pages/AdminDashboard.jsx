@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiUrl } from "../utils/api";
 
 const STAT_CARD_COLORS = {
   users: { bg: "#e0f2f1", border: "#0d9488", icon: "👥" },
@@ -25,6 +26,12 @@ export default function AdminDashboard() {
       const oneDayMs = 24 * 60 * 60 * 1000;
 
       const totalPrescriptions = history.length;
+      const localUniqueUsers = new Set(
+        history.map((h) => {
+          const email = (h.ownerEmail || "").trim().toLowerCase();
+          return email || "guest";
+        })
+      ).size;
       const highRiskCount = history.filter((h) => (h.riskScore?.score ?? 100) < 55).length;
       const totalMeds = history.reduce((sum, h) => sum + (h.medicines?.length || 0), 0);
       const avgMeds = totalPrescriptions > 0 ? (totalMeds / totalPrescriptions).toFixed(1) : 0;
@@ -54,6 +61,10 @@ export default function AdminDashboard() {
           userCount = data.userCount || 0;
         }
       } catch { /* backend may be offline */ }
+
+      if (userCount === 0 && localUniqueUsers > 0) {
+        userCount = localUniqueUsers;
+      }
 
       setStats({
         users: userCount,
