@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run Medicheck Backend",
+      "request": "launch",
+      "mainClass": "com.example.medicheck_backend.MedicheckBackendApplication",
+      "projectName": "medicheck",
+      "cwd": "${workspaceFolder}/Medicheck_backend",
+      "env": {
+        "CORS_ALLOWED_ORIGIN_PATTERNS": "http://localhost:5173",
+        "GEMINI_API_KEY": "",
+        "GEMINI_API_KEY_BACKUP": "",
+        "HUGGINGFACE_API_TOKEN": "",
+        "GOOGLE_VISION_API_KEY": ""
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 package com.example.medicheck_backend.controller;
 
 import com.example.medicheck_backend.service.GeminiVisionService;
+import com.example.medicheck_backend.service.HuggingFaceVisionService;
 import com.example.medicheck_backend.service.OCRService;
 import com.example.medicheck_backend.service.PrescriptionInsightsService;
 import org.slf4j.Logger;
@@ -19,7 +20,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/analyze")
-@CrossOrigin(originPatterns = "http://localhost:*")
 public class OCRController {
 
     private static final Logger logger = LoggerFactory.getLogger(OCRController.class);
@@ -29,6 +29,9 @@ public class OCRController {
 
     @Autowired
     private GeminiVisionService geminiVisionService;
+
+    @Autowired
+    private HuggingFaceVisionService huggingFaceVisionService;
 
     @Autowired
     private PrescriptionInsightsService prescriptionInsightsService;
@@ -135,8 +138,31 @@ public class OCRController {
                 response.put("usedFallback", false);
                 response.putAll(insights);
             } else {
-                // Fallback: Gemini Vision failed. Try OCR + Gemini text interpretation hybrid.
-                logger.info("Gemini Vision unavailable or failed, falling back to OCR + text interpretation...");
+                // Fallback step 1: Gemini Vision failed, try Hugging Face vision.
+                logger.info("Gemini Vision unavailable or failed, trying Hugging Face vision fallback...");
+
+                Optional<String> hfResult = huggingFaceVisionService.analyzePrescription(tempFile);
+                if (hfResult.isPresent() && hfResult.get().length() > 30) {
+                    String hfText = hfResult.get();
+                    logger.info("Hugging Face vision fallback succeeded, response length: {} chars", hfText.length());
+
+                    Map<String, Object> insights = prescriptionInsightsService.buildInsightsFromGemini(hfText);
+                    response.put("success", true);
+                    response.put("rawText", "");
+                    response.put("text", hfText);
+                    response.put("geminiAnalysis", hfText);
+                    response.put("message", "Prescription analyzed using Hugging Face vision fallback");
+                    response.put("processingMode", "hf_vision_fallback");
+                    response.put("usedFallback", true);
+                    if (geminiVisionService.wasQuotaExceededRecently()) {
+                        response.put("fallbackReason", "ai_quota_exhausted");
+                    } else {
+                        response.put("fallbackReason", "ai_vision_unavailable");
+                    }
+                    response.putAll(insights);
+                } else {
+                    // Fallback step 2: Gemini + HF failed. Try OCR + Gemini text interpretation hybrid.
+                    logger.info("Hugging Face vision fallback unavailable, falling back to OCR + text interpretation...");
                 String extractedText = ocrService.extractText(tempFile);
                 logger.info("OCR extraction completed, length: {} characters", extractedText.length());
 
@@ -170,8 +196,13 @@ public class OCRController {
                     response.put("message", "Prescription analyzed using OCR only");
                     response.put("processingMode", "ocr_only");
                     response.put("usedFallback", true);
-                    response.put("fallbackReason", geminiVisionService.wasQuotaExceededRecently() ? "ai_quota_exhausted" : "ai_unavailable");
+                    if (geminiVisionService.wasQuotaExceededRecently() || huggingFaceVisionService.wasQuotaExceededRecently()) {
+                        response.put("fallbackReason", "ai_quota_exhausted");
+                    } else {
+                        response.put("fallbackReason", "ai_unavailable");
+                    }
                     response.putAll(insights);
+                }
                 }
             }
 

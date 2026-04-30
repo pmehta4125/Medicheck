@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { parsePrescription, parsePrescriptionInfo } from "../utils/medicineParser";
-import { getAuthSession, isGuestSession } from "../utils/auth";
+import { getAuthSession } from "../utils/auth";
 import { markPrescriptionUploaded } from "../utils/prescription";
 import { apiUrl } from "../utils/api";
 
@@ -71,6 +71,22 @@ async function analyzeImageQuality(file) {
     const variance = Math.max(0, sumSquares / totalPixels - avgBrightness * avgBrightness);
     const contrastStd = Math.sqrt(variance);
 
+    // Compute saturation and white-pixel proportion for document detection
+    let saturationSum = 0;
+    let whitePixelCount = 0;
+    for (let i = 0; i < pixelData.length; i += 4) {
+      const r = pixelData[i];
+      const g = pixelData[i + 1];
+      const b = pixelData[i + 2];
+      const maxC = Math.max(r, g, b);
+      const minC = Math.min(r, g, b);
+      const sat = maxC > 0 ? (maxC - minC) / maxC : 0;
+      saturationSum += sat;
+      if (r > 200 && g > 200 && b > 200) whitePixelCount += 1;
+    }
+    const avgSaturation = saturationSum / totalPixels;
+    const whiteProportion = whitePixelCount / totalPixels;
+
     let edgeCount = 0;
     let gradientSum = 0;
     let laplacianSum = 0;
@@ -126,6 +142,13 @@ async function analyzeImageQuality(file) {
 
     const textClarityScore = normalizeRange(edgeDensity, 1.5, 14) * 100;
 
+    // Block only clearly non-document images: highly colorful photos with almost no white/light area.
+    // Prescriptions may have colored letterheads or be photographed in warm light, so we use
+    // an exclusion rule rather than a strict positive match.
+    // Natural/scenic photos: avgSaturation > 0.32 and whiteProportion < 0.12
+    // Prescriptions: typically avgSaturation < 0.25 OR whiteProportion > 0.15
+    const likelyPrescription = !(avgSaturation > 0.32 && whiteProportion < 0.12);
+
     const checks = {
       resolutionOk: resolutionScore >= 40,
       brightnessOk: lightingScore >= 45,
@@ -164,6 +187,10 @@ async function analyzeImageQuality(file) {
     return {
       score,
       status: getQualityStatus(score),
+      likelyPrescription,
+      validationMessage: likelyPrescription
+        ? ""
+        : "This image does not look like a prescription document. Please upload a clear prescription image.",
       checks,
       tips,
       metrics: {
@@ -187,9 +214,8 @@ export default function UploadPrescriptions() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [qualityReport, setQualityReport] = useState(null);
-  const [showGuestLimitModal, setShowGuestLimitModal] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
-  const [duplicateMatch, setDuplicateMatch] = useState(null);
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -230,13 +256,6 @@ export default function UploadPrescriptions() {
 
     if (!file) return;
 
-    // Guest users can only upload one prescription
-    if (isGuestSession() && localStorage.getItem("guestUploadUsed") === "1") {
-      e.target.value = "";
-      setShowGuestLimitModal(true);
-      return;
-    }
-
     if (!file.type.startsWith("image/")) {
       setError("Please select a valid image file.");
       setSelectedFile(null);
@@ -246,33 +265,21 @@ export default function UploadPrescriptions() {
     }
 
     setError("");
-    setDuplicateMatch(null);
-    setSelectedFile(file);
-    
-    // Create blob URL for preview display
-    const blobUrl = URL.createObjectURL(file);
-    setPreviewUrl(blobUrl);
-
-    // Check for duplicate image in history
-    try {
-      const buf = await file.arrayBuffer();
-      const hashBuf = await crypto.subtle.digest("SHA-256", buf);
-      const hashArr = Array.from(new Uint8Array(hashBuf));
-      const fileHash = hashArr.map(b => b.toString(16).padStart(2, "0")).join("");
-
-      const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
-      // Match by content hash first, then fallback to filename + size for old entries without hash
-      const existing = history.find(h => h.fileHash === fileHash)
-        || history.find(h => h.fileName === file.name && !h.fileHash);
-      if (existing) {
-        setDuplicateMatch(existing);
-      }
-    } catch (hashErr) {
-      console.error("Hash check failed:", hashErr);
-    }
 
     try {
       const report = await analyzeImageQuality(file);
+      if (!report.likelyPrescription) {
+        setError(report.validationMessage);
+        setSelectedFile(null);
+        setPreviewUrl("");
+        setQualityReport(null);
+        e.target.value = "";
+        return;
+      }
+
+      setSelectedFile(file);
+      const blobUrl = URL.createObjectURL(file);
+      setPreviewUrl(blobUrl);
       setQualityReport(report);
     } catch (analysisError) {
       console.error("Quality analysis failed:", analysisError);
@@ -285,7 +292,6 @@ export default function UploadPrescriptions() {
     setPreviewUrl("");
     setError("");
     setQualityReport(null);
-    setDuplicateMatch(null);
   };
 
   const normalizeResult = (apiData) => {
@@ -396,18 +402,10 @@ export default function UploadPrescriptions() {
         id: Date.now(),
         uploadedAt: new Date().toISOString(),
         fileName: selectedFile.name,
+        previewUrl: dataUrl || "",
         ownerEmail: getAuthSession()?.email || "",
       };
 
-      // Compute file hash for duplicate detection
-      try {
-        const buf = await selectedFile.arrayBuffer();
-        const hashBuf = await crypto.subtle.digest("SHA-256", buf);
-        const hashArr = Array.from(new Uint8Array(hashBuf));
-        enrichedResult.fileHash = hashArr.map(b => b.toString(16).padStart(2, "0")).join("");
-      } catch (hashErr) {
-        console.error("Hash generation failed:", hashErr);
-      }
 
       const history = JSON.parse(localStorage.getItem("prescriptionHistory")) || [];
       const updatedHistory = [enrichedResult, ...history].slice(0, 20);
@@ -417,10 +415,6 @@ export default function UploadPrescriptions() {
       markPrescriptionUploaded();
 
       setProgress(100);
-      // Mark guest upload as used after successful processing
-      if (isGuestSession()) {
-        localStorage.setItem("guestUploadUsed", "1");
-      }
       navigate("/results", { replace: true });
     } catch (err) {
       console.error("Upload error:", err);
@@ -433,56 +427,6 @@ export default function UploadPrescriptions() {
   return (
     <div className="upload-container">
       <h1 className="upload-title">Upload Prescription</h1>
-
-      {/* Guest limit modal */}
-      {showGuestLimitModal && (
-        <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-            zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-          onClick={() => setShowGuestLimitModal(false)}
-        >
-          <div
-            style={{
-              background: "#fff", borderRadius: "16px", padding: "32px 28px",
-              maxWidth: "400px", width: "90%", textAlign: "center",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>🔒</div>
-            <h2 style={{ color: "#0f766e", fontWeight: 700, fontSize: "20px", marginBottom: "10px" }}>
-              Guest Limit Reached
-            </h2>
-            <p style={{ color: "#374151", marginBottom: "24px", lineHeight: 1.6 }}>
-              You have used your free guest upload. Please <strong>login or sign up</strong> to continue uploading prescriptions.
-            </p>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-              <button
-                onClick={() => navigate("/login")}
-                style={{
-                  background: "#0f766e", color: "#fff", border: "none",
-                  borderRadius: "8px", padding: "10px 24px", fontWeight: 600,
-                  fontSize: "15px", cursor: "pointer",
-                }}
-              >
-                Login
-              </button>
-              <button
-                onClick={() => navigate("/signup")}
-                style={{
-                  background: "#fff", color: "#0f766e", border: "2px solid #0f766e",
-                  borderRadius: "8px", padding: "10px 24px", fontWeight: 600,
-                  fontSize: "15px", cursor: "pointer",
-                }}
-              >
-                Sign Up
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="upload-box">
         {uploadMessage ? (
@@ -510,44 +454,6 @@ export default function UploadPrescriptions() {
         />
 
         {selectedFile && <p className="file-count">Selected: {selectedFile.name}</p>}
-
-        {duplicateMatch && (
-          <div style={{
-            background: "#fffbeb", border: "1px solid #f59e0b", borderRadius: "12px",
-            padding: "16px 20px", margin: "10px 0", textAlign: "center",
-          }}>
-            <p style={{ margin: 0, fontWeight: 600, color: "#92400e", fontSize: "15px" }}>
-              This image is already in your upload history
-            </p>
-            <p style={{ margin: "6px 0 12px", color: "#78716c", fontSize: "13px" }}>
-              Uploaded as <strong>{duplicateMatch.fileName}</strong> on{" "}
-              {new Date(duplicateMatch.uploadedAt).toLocaleString()}
-            </p>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-              <button
-                style={{
-                  padding: "8px 20px", borderRadius: "8px", border: "none",
-                  background: "#0d9488", color: "#fff", fontWeight: 600, cursor: "pointer",
-                }}
-                onClick={() => {
-                  localStorage.setItem("extractedText", JSON.stringify([duplicateMatch]));
-                  navigate("/results");
-                }}
-              >
-                View Previous Result
-              </button>
-              <button
-                style={{
-                  padding: "8px 20px", borderRadius: "8px", border: "1px solid #d1d5db",
-                  background: "#fff", color: "#374151", fontWeight: 600, cursor: "pointer",
-                }}
-                onClick={() => setDuplicateMatch(null)}
-              >
-                Upload Anyway
-              </button>
-            </div>
-          </div>
-        )}
 
         {previewUrl && (
           <div className="upload-preview-wrap">

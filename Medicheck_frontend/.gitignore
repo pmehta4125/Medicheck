@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 server/.env
+
+# Large video files (exceed GitHub 100MB limit)
+public/videos/*.mp4

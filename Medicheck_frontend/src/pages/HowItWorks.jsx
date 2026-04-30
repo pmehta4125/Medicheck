@@ -76,7 +76,7 @@ export default function HowItWorks() {
             preload="metadata"
             onLoadedMetadata={setNormalSpeed}
           >
-            <source src="/videos/patient-demo.mp4" type="video/mp4" />
+            <source src="/videos/Sem-6_IT045_IT075_Medicheck.mp4" type="video/mp4" />
             Your browser does not support the video tag.
           </video>
           <p className="patient-demo-note">

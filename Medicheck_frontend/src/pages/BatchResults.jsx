@@ -3,8 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { hasUploadedPrescription, UPLOAD_REQUIRED_MESSAGE } from "../utils/prescription";
 import { getAuthSession } from "../utils/auth";
 
-const prescriptionPreviewUrl = localStorage.getItem("prescriptionPreview") || "";
-
 const BRAND_ALIAS_GROUPS = [
   ["paracetamol", "dolo", "calpol", "crocin"],
   ["cetirizine", "cetzine"],
@@ -178,6 +176,13 @@ function stringifyRiskLevel(value = "") {
 function getFallbackNotice(result) {
   if (!result?.usedFallback) return null;
 
+  if (result.processingMode === "hf_vision_fallback") {
+    return {
+      title: "Backup AI vision used",
+      body: "Primary AI image analysis was unavailable, so this report was generated with Hugging Face vision backup. Please review low-confidence medicines carefully.",
+    };
+  }
+
   if (result.fallbackReason === "ai_quota_exhausted") {
     return {
       title: "AI temporarily unavailable",
@@ -234,6 +239,9 @@ export default function BatchResults() {
   useEffect(() => {
     setEditableMedicines(activeResult?.medicines || []);
   }, [activeResult]);
+
+  const prescriptionPreviewUrl =
+    activeResult?.previewUrl || localStorage.getItem("prescriptionPreview") || "";
 
   const prescribedMedicines = editableMedicines;
   const hasEdits = prescribedMedicines !== (activeResult?.medicines || []);

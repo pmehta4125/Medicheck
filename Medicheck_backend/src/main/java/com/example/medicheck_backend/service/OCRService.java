@@ -207,9 +207,13 @@ public class OCRService implements OCRServiceInterface {
     }
 
     private String runOcrPass(File targetFile, String tesseractPath, int pageSegMode) throws TesseractException {
-        Tesseract tesseract = buildTesseract(tesseractPath, pageSegMode);
-        String output = tesseract.doOCR(targetFile);
-        return output == null ? "" : output.trim();
+        try {
+            Tesseract tesseract = buildTesseract(tesseractPath, pageSegMode);
+            String output = tesseract.doOCR(targetFile);
+            return output == null ? "" : output.trim();
+        } catch (LinkageError e) {
+            throw new RuntimeException("Native OCR library load failed or was blocked by OS policy", e);
+        }
     }
 
     private Tesseract buildTesseract(String tesseractPath, int pageSegMode) {
