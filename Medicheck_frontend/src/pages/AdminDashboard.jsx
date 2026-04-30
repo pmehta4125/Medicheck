@@ -31,7 +31,14 @@ export default function AdminDashboard() {
       const geminiCount = history.filter((h) => h.geminiAnalysis).length;
       const ocrCount = Math.max(0, totalPrescriptions - geminiCount);
       const accuracyPercent = totalPrescriptions > 0 ? Math.round((geminiCount / totalPrescriptions) * 100) : 0;
-      const uploadsToday = history.filter((h) => now - new Date(h.uploadedAt || 0).getTime() <= oneDayMs).length;
+      const uploadsTodayEntries = history.filter((h) => now - new Date(h.uploadedAt || 0).getTime() <= oneDayMs);
+      const uploadsToday = uploadsTodayEntries.length;
+      const usersUsedToday = new Set(
+        uploadsTodayEntries.map((h) => {
+          const email = (h.ownerEmail || "").trim().toLowerCase();
+          return email || "guest";
+        })
+      ).size;
       const failedToday = history.filter((h) => {
         const uploadedAt = new Date(h.uploadedAt || 0).getTime();
         const isToday = now - uploadedAt <= oneDayMs;
@@ -56,11 +63,12 @@ export default function AdminDashboard() {
         aiQueries: geminiCount,
         avgMeds: avgMeds,
         ocrQueries: ocrCount,
+        usersUsedToday,
         uploadsToday,
         failedToday,
       });
     } catch {
-      setStats({ users: 0, prescriptions: 0, accuracy: 0, highRisk: 0, aiQueries: 0, avgMeds: 0, ocrQueries: 0, uploadsToday: 0, failedToday: 0 });
+      setStats({ users: 0, prescriptions: 0, accuracy: 0, highRisk: 0, aiQueries: 0, avgMeds: 0, ocrQueries: 0, usersUsedToday: 0, uploadsToday: 0, failedToday: 0 });
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -136,7 +144,7 @@ export default function AdminDashboard() {
           justifyContent: "space-between",
         }}
       >
-        <SnapshotItem label="New Users Today" value={0} />
+        <SnapshotItem label="Users Used App Today" value={stats.usersUsedToday} />
         <SnapshotItem label="Uploads Today" value={stats.uploadsToday} />
         <SnapshotItem label="Failures Today" value={stats.failedToday} />
       </div>
